@@ -198,27 +198,58 @@
     return { goods, ship, fee, total: goods + ship + fee };
   }
 
-  // ==== Phân loại nhanh theo số lượng ====
-  // Mẫu có sẵn dùng chung cho mọi sản phẩm. Phân loại thêm tay chỉ nằm trong sản phẩm đó, không đi vào mẫu.
-  const QTY_PRESETS = [
-    { id: 'q-nho', name: 'Số lượng nhỏ', unit: 'cái', tiers: [10, 20, 50, 100] },
-    { id: 'q-chuan', name: 'Thông dụng', unit: 'cái', tiers: [50, 100, 200, 500, 1000] },
-    { id: 'q-lon', name: 'Số lượng lớn', unit: 'cái', tiers: [500, 1000, 2000, 5000] }
-  ];
-  const qtyPresets = db => QTY_PRESETS.map(x => Object.assign({ builtin: true }, x)).concat(db.variantPresets || []);
-  // "50, 100  200;500" → [50, 100, 200, 500] (bỏ trùng, xếp tăng dần)
-  function parseTiers(s) {
-    const set = new Set(String(s || '').split(/[\s,;]+/).map(x => Math.round(parseNum(x))).filter(n => n > 0));
-    return [...set].sort((a, b) => a - b);
+  // ==== Phân loại theo nhóm và SKU ====
+  // Thư viện (db.variantLib): các nhóm dùng chung như Số lượng, Kích thước, Màu. Mỗi sản phẩm chọn nhóm từ thư viện
+  // hoặc tạo nhóm riêng gõ tay (chỉ nằm trong sản phẩm đó, không vào thư viện).
+  // Sản phẩm có groups: [{ id, name, libId?, values[], options[]? }] (options: danh sách giá trị của nhóm riêng).
+  // skus: mọi tổ hợp giá trị { id, key, opts[], on, price, minQty }.
+  // variants (thứ khách đặt và máy chủ kiểm tra) = các SKU đang bán, mỗi cái có opts theo thứ tự nhóm.
+  // Thư viện bắt đầu trống: shop tự tạo nhóm và lựa chọn ở mục Phân loại
+  const baseVariantLib = () => [];
+  const SKU_SEP = '\u001f';
+  const skuKey = opts => opts.join(SKU_SEP);
+  const libGroup = (db, id) => (db.variantLib || []).find(x => x.id === id) || null;
+  // Tên nhóm hiện trong sản phẩm: theo thư viện nếu còn, không thì tên đã lưu
+  const groupName = (db, g) => (g.libId && (libGroup(db, g.libId) || {}).name) || g.name;
+  // Mọi giá trị chọn được của một nhóm: thư viện (còn tồn tại) hoặc danh sách riêng, cộng các giá trị sản phẩm đã chọn từ trước
+  function groupOptions(db, g) {
+    const lib = g.libId && libGroup(db, g.libId);
+    const base = lib ? lib.values : (g.options || []);
+    return base.concat((g.values || []).filter(v => !base.includes(v)));
   }
-  // Giá mỗi phân loại = đơn giá × số lượng (để trống nếu chưa nhập đơn giá, shop điền sau)
-  function qtyVariants(tiers, unit, unitPrice, prefix) {
-    const u = String(unit || '').trim();
-    const pre = String(prefix || '').trim();
-    return tiers.map(n => ({
-      id: uid('v'), name: (pre ? pre + ' · ' : '') + nf.format(n) + (u ? ' ' + u : ''),
-      price: +unitPrice > 0 ? Math.round(+unitPrice * n) : '', minQty: 1
-    }));
+  // Tổ hợp mọi giá trị đã chọn: [['Da lì','Kem'], ...]. Nhóm nào chưa chọn giá trị thì chưa có tổ hợp nào.
+  function combos(groups) {
+    if (!groups.length) return [];
+    return groups.reduce((out, g) => {
+      const vs = g.values || [];
+      return [].concat(...out.map(o => vs.map(v => o.concat(v))));
+    }, [[]]);
+  }
+  // Dựng lại bảng SKU, giữ giá, mã, bật tắt của tổ hợp đã có (kể cả tổ hợp vừa bị bỏ, nằm trong stash)
+  function rebuildSkus(groups, old, stash) {
+    const have = new Map();
+    (stash || []).concat(old || []).forEach(x => have.set(x.key, x));
+    const olds = [...have.values()];
+    return combos(groups).map(o => {
+      const k = skuKey(o), x = have.get(k);
+      if (x) return Object.assign({}, x, { opts: o });
+      // Tổ hợp mới do thêm nhóm: thừa hưởng bật/tắt, giá, tối thiểu từ tổ hợp cũ nằm trọn trong nó (nhiều giá trị trùng nhất)
+      const from = olds.filter(y => y.opts.length && y.opts.every(v => o.includes(v))).sort((u, v) => v.opts.length - u.opts.length)[0];
+      return from ? { id: uid('v'), key: k, opts: o, on: from.on, price: from.price, minQty: from.minQty } : { id: uid('v'), key: k, opts: o, on: true, price: '', minQty: 1 };
+    });
+  }
+  const variantsFromSkus = skus => skus.filter(x => x.on).map(x => ({
+    id: x.id, name: x.opts.join(' / '), price: Math.round(+x.price || 0), minQty: Math.max(1, +x.minQty || 1), opts: x.opts.slice()
+  }));
+  // Khách chọn một giá trị ở nhóm gi: lấy SKU đang bán có giá trị đó và trùng nhiều nhất với các lựa chọn ở nhóm khác
+  function pickVariant(variants, gi, value, cur) {
+    let best = null, score = -1;
+    variants.forEach(v => {
+      if ((v.opts || [])[gi] !== value) return;
+      const sc = (v.opts || []).reduce((a, o, i) => a + (i !== gi && cur && cur[i] === o ? 1 : 0), 0);
+      if (sc > score) { best = v; score = sc; }
+    });
+    return best;
   }
 
   // ==== Logistics: kho trung chuyển TQ–VN và bảng giá cân ====
@@ -569,7 +600,7 @@
         lines: lineFrom(byItem('sp-aothun'), [19]).concat(lineFrom(byItem('sp-mockhoa'), [1.8])) }
     ];
 
-    return { version: VERSION, seq: n, jobSeq: 2, settings, categories: baseCategories(), products, customers, factories, logistics: baseLogistics(), printJobs, jobFees: [], variantPresets: [], orders };
+    return { version: VERSION, seq: n, jobSeq: 2, settings, categories: baseCategories(), products, customers, factories, logistics: baseLogistics(), printJobs, jobFees: [], variantLib: baseVariantLib(), orders };
   }
 
   // ==== LƯU TRỮ (thay phần này khi có backend) ====
@@ -593,7 +624,7 @@
           if (!Array.isArray(d.logistics)) d.logistics = baseLogistics();
           if (!Array.isArray(d.printJobs)) d.printJobs = [];
           if (!Array.isArray(d.jobFees)) d.jobFees = [];
-          if (!Array.isArray(d.variantPresets)) d.variantPresets = [];
+          if (!Array.isArray(d.variantLib)) d.variantLib = baseVariantLib();
           memory = d;
           return d;
         }
@@ -829,13 +860,13 @@
     deleteJobFee(db, id) {
       db.jobFees = (db.jobFees || []).filter(f => f.id !== id);
     },
-    saveVariantPreset(db, p) {
-      db.variantPresets = db.variantPresets || [];
-      const i = db.variantPresets.findIndex(x => x.id === p.id);
-      if (i >= 0) db.variantPresets[i] = p; else db.variantPresets.push(p);
+    saveVarGroup(db, g) {
+      db.variantLib = db.variantLib || [];
+      const i = db.variantLib.findIndex(x => x.id === g.id);
+      if (i >= 0) db.variantLib[i] = g; else db.variantLib.push(g);
     },
-    deleteVariantPreset(db, id) {
-      db.variantPresets = (db.variantPresets || []).filter(x => x.id !== id);
+    deleteVarGroup(db, id) {
+      db.variantLib = (db.variantLib || []).filter(x => x.id !== id);
     },
     // Quản trị sửa đơn: thông tin khách, file, ghi chú, số lượng và giá từng dòng, cách thanh toán
     editOrder(db, o, data) {
@@ -926,7 +957,7 @@
   const SEP = '\u0001';
   const PUBLIC_KINDS = ['settings', 'category', 'product'];
   const COLLECTIONS = [['category', 'categories'], ['product', 'products'], ['customer', 'customers'], ['factory', 'factories'],
-    ['logistic', 'logistics'], ['printjob', 'printJobs'], ['jobfee', 'jobFees'], ['preset', 'variantPresets'], ['order', 'orders']];
+    ['logistic', 'logistics'], ['printjob', 'printJobs'], ['jobfee', 'jobFees'], ['varlib', 'variantLib'], ['order', 'orders']];
   let sb = null, pageRole = 'shop', adminOk = false, adminEmail = '', loadError = null;
   const synced = new Map(); // khóa → { json, ts }: trạng thái đã có trên máy chủ
   const changeCbs = [];
@@ -943,7 +974,7 @@
 
   function emptyDb() {
     return { version: VERSION, seq: 0, jobSeq: 0, settings: baseSettings(), categories: [], products: [], customers: [], factories: [],
-      logistics: [], printJobs: [], jobFees: [], variantPresets: [], orders: [] };
+      logistics: [], printJobs: [], jobFees: [], variantLib: [], orders: [] };
   }
 
   // Mọi thứ trong db thành các dòng (kind, id, data). adminEmail không đưa lên máy chủ (đăng nhập do Supabase quản).
@@ -1083,7 +1114,7 @@
   function mergeRows(rows) {
     rows.forEach(r => {
       if (r.kind === 'settings') applySettings(memory, r.data);
-      else if (r.kind === 'meta') { if (r.id === 'counters') memory.jobSeq = +r.data.jobSeq || 0; }
+      else if (r.kind === 'meta') { if (r.id === 'counters') { memory.jobSeq = +r.data.jobSeq || 0; } }
       else {
         const col = COLLECTIONS.find(c => c[0] === r.kind);
         if (!col) return;
@@ -1123,10 +1154,7 @@
 
   // Lần đầu quản trị đăng nhập vào máy chủ còn trống: tạo cài đặt và 4 danh mục mặc định
   function ensureSeed() {
-    if (!serverHasSettings) {
-      memory.categories = baseCategories();
-      scheduleFlush();
-    }
+    if (!serverHasSettings) { memory.categories = baseCategories(); scheduleFlush(); }
   }
 
   function startPolling() {
@@ -1356,7 +1384,8 @@
     findOrder, findCustomer, findFactory, findProduct, findCategory, findCustomerByPhone,
     LOGO, loadLogo, brandMark, hasLogo: () => !!logoSrc(), logoSrc,
     SHOW_KEYS, THEMES, MODES, FONTS, SIZE_NAMES, baseLook, normLook, applyLook, lookOf, showSection, catVisible, visibleCategories,
-    feeShares, feesOfJob, jobFeeTotal, jobFullCost, QTY_PRESETS, qtyPresets, parseTiers, qtyVariants,
+    feeShares, feesOfJob, jobFeeTotal, jobFullCost,
+    libGroup, groupName, groupOptions, combos, skuKey, rebuildSkus, variantsFromSkus, pickVariant,
     isCloud: CLOUD, init, auth, cust, uploadImage, errText, pendingCount,
     syncState: () => syncState, loadError: () => loadError,
     act, ui: { toast, copyText, selectText, lightbox, fileToDataUrl }

@@ -22,7 +22,7 @@
     cEdit: null, cDel: null, fEdit: null, dataAsk: null,
     look: null,
     feEdit: null, feDraft: null, feDel: null,
-    qk: { open: false, unit: 'cái', tiers: '50, 100, 200, 500, 1000', price: '', prefix: '', pname: '' }
+    gCustom: null, libDel: null, libEdit: null, joq: '', npq: ''
   };
   let lastRoute = '';
 
@@ -45,6 +45,7 @@
     if (h === 'logistics') return { view: 'logistics' };
     if (h === 'cai-dat') return { view: 'settings' };
     if (h === 'giao-dien') return { view: 'look' };
+    if (h === 'thu-vien') return { view: 'library' };
     return { view: 'overview' };
   }
   function go(hash) {
@@ -124,6 +125,7 @@
       case 'jobs': body = viewJobs(db); break;
       case 'settings': body = viewSettings(db); break;
       case 'look': body = viewLook(db); break;
+      case 'library': body = viewLibrary(db); break;
       default: body = viewOverview(db);
     }
     app.innerHTML = `<div class="adm">${side(db, r.view)}<main class="adm-main" id="main">${body}</main></div>`;
@@ -145,6 +147,7 @@
         <a href="#don-hang"${cur('orders', 'order')}>Đơn hàng${todo ? ` <span class="count" aria-label="${todo} đơn cần xử lý">${todo}</span>` : ''}</a>
         <a href="#don-in"${cur('jobs')}>Đơn in</a>
         <a href="#san-pham"${cur('products', 'product')}>Sản phẩm</a>
+        <a href="#thu-vien"${cur('library')}>Phân loại</a>
         <a href="#danh-muc"${cur('categories')}>Danh mục</a>
         <a href="#xuong"${cur('factories')}>Xưởng</a>
         <a href="#logistics"${cur('logistics')}>Logistics</a>
@@ -571,34 +574,103 @@
       : `<div class="panel empty"><h3>${db.products.length ? 'Không có sản phẩm phù hợp' : 'Chưa có sản phẩm nào'}</h3><p>${db.products.length ? 'Thử bỏ bớt bộ lọc.' : 'Thêm sản phẩm đầu tiên, rồi thêm các phân loại và giá.'}</p><a class="btn btn-cta btn-sm" href="#sp-moi">Thêm sản phẩm</a></div>`}`;
   }
 
-  // Tạo nhanh phân loại theo số lượng. Mẫu dùng chung; phân loại thêm tay chỉ ở sản phẩm này.
-  function quickBox(db) {
-    const q = ui.qk;
-    const b = 'data-nokeep="1"';
-    const presets = P.qtyPresets(db).map(x => `<span class="qchip"><button type="button" class="chip-btn" data-act="qk-preset" data-id="${esc(x.id)}">${esc(x.name)} <span class="n">${x.tiers.map(n => fmt.num(n)).join(' · ')}</span></button>${x.builtin ? '' : `<button type="button" class="qdel" data-act="qk-del" data-id="${esc(x.id)}" aria-label="Xóa mẫu ${esc(x.name)}">×</button>`}</span>`).join('');
-    return `<div class="qk">
-      <button class="btn btn-ghost btn-sm" type="button" data-act="qk-toggle" aria-expanded="${q.open}">Tạo nhanh theo số lượng</button>
-      ${q.open ? `<div class="qk-body">
-        <p class="hint">Chọn một mẫu số lượng hoặc tự nhập các mức, web tạo sẵn từng phân loại. Giá mỗi phân loại là giá cả gói, khách chọn phân loại rồi chọn số gói.</p>
-        <div class="qchips" role="group" aria-label="Mẫu số lượng">${presets}</div>
-        <div class="form-grid">
-          <div class="field full"><label for="qk-tiers">Các mức số lượng (cách nhau bằng dấu phẩy)</label><input id="qk-tiers" ${b} data-qk="tiers" value="${esc(q.tiers)}" autocomplete="off" placeholder="50, 100, 200, 500, 1000"></div>
-          <div class="field"><label for="qk-unit">Đơn vị</label><input id="qk-unit" ${b} data-qk="unit" value="${esc(q.unit)}" autocomplete="off" placeholder="cái, tờ, bộ…"></div>
-          <div class="field"><label for="qk-price">Đơn giá mỗi cái (không bắt buộc)</label><div class="unit"><input id="qk-price" ${b} data-qk="price" value="${esc(q.price)}" inputmode="numeric" autocomplete="off" placeholder="Để trống nếu nhập giá sau"><span>₫</span></div></div>
-          <div class="field full"><label for="qk-prefix">Ghi thêm vào tên (không bắt buộc)</label><input id="qk-prefix" ${b} data-qk="prefix" value="${esc(q.prefix)}" autocomplete="off" placeholder="VD: In 2 mặt"></div>
-        </div>
-        <p class="hint" id="qk-out" aria-live="polite">${qkText()}</p>
-        <p class="err" id="err-qk"></p>
-        <div class="actions" style="margin-top:8px"><button class="btn btn-cta btn-sm" type="button" data-act="qk-gen">Tạo phân loại</button>
-          <input class="qk-name" id="qk-pname" ${b} data-qk="pname" value="${esc(q.pname)}" autocomplete="off" placeholder="Tên mẫu mới" aria-label="Tên mẫu mới">
-          <button class="btn btn-quiet btn-sm" type="button" data-act="qk-save">Lưu các mức này thành mẫu</button></div>
-      </div>` : ''}</div>`;
+  // ==== Phân loại theo nhóm và bảng SKU ====
+  // Nhóm lấy từ thư viện (dùng chung) hoặc tạo riêng gõ tay (chỉ nằm trong sản phẩm này). Mỗi tổ hợp giá trị là một SKU có giá riêng.
+  const restCombos = p => (p.groups.length > 2 ? P.combos(p.groups.slice(2)) : [[]]);
+  const skuByOpts = p => { const m = new Map(); p.skus.forEach(x => m.set(P.skuKey(x.opts), x)); return m; };
+
+  // Dựng lại bảng SKU sau khi đổi nhóm hoặc giá trị. SKU vừa biến mất được cất trong _stash để khôi phục nếu chọn lại.
+  function syncSkus() {
+    const p = ui.prod;
+    const old = p.skus || [];
+    p.skus = P.rebuildSkus(p.groups, old, p._stash || []);
+    p._stash = (p._stash || []).concat(old);
   }
-  function qkText() {
-    const q = ui.qk;
-    const t = P.parseTiers(q.tiers);
-    if (!t.length) return 'Nhập ít nhất một mức số lượng.';
-    return 'Sẽ tạo ' + t.length + ' phân loại: ' + P.qtyVariants(t, q.unit, P.parseNum(q.price), q.prefix).map(v => v.name + (v.price !== '' ? ' (' + fmt.vnd(v.price) + ')' : '')).join(', ') + '.';
+
+  function groupBox(db, p, g, gi) {
+    const opts = P.groupOptions(db, g);
+    const custom = !(g.libId && P.libGroup(db, g.libId));
+    const chips = opts.map((o, oi) => `<span class="gchip"><button class="vchip-s" type="button" data-act="g-toggle" data-g="${gi}" data-i="${oi}" aria-pressed="${g.values.includes(o)}">${esc(o)}</button>${custom ? `<button class="gchip-x" type="button" data-act="g-opt-rm" data-g="${gi}" data-i="${oi}" aria-label="Xóa giá trị ${esc(o)}">×</button>` : ''}</span>`).join('');
+    return `<div class="gbox">
+      <div class="gbox-h"><b>${esc(P.groupName(db, g))}</b> <span class="muted">(${g.values.length}/${opts.length})</span>${custom ? '<span class="pill">Riêng</span>' : ''}
+        <span class="gbox-act"><button class="link-btn" type="button" data-act="g-all" data-g="${gi}">Chọn tất cả</button><button class="link-btn" type="button" data-act="g-none" data-g="${gi}">Bỏ hết</button>
+          <button class="icon-btn" type="button" data-act="g-del" data-g="${gi}" aria-label="Xóa nhóm ${esc(P.groupName(db, g))}">×</button></span></div>
+      <div class="gchips">${chips || '<span class="muted">Chưa có giá trị nào.</span>'}</div>
+      ${custom ? `<div class="g-addval"><input data-nokeep="1" data-gopt="${gi}" id="gopt-${gi}" placeholder="Gõ giá trị rồi Enter, ví dụ: Khắc tên" autocomplete="off" aria-label="Thêm giá trị cho nhóm ${esc(g.name)}"><button class="btn btn-quiet btn-xs" type="button" data-act="g-opt-add" data-g="${gi}">Thêm</button></div>` : ''}
+    </div>`;
+  }
+
+  function groupControls(db, p) {
+    const libs = (db.variantLib || []).filter(l => !p.groups.some(g => g.libId === l.id));
+    return `<div class="g-add"><select id="g-add-lib" data-nokeep="1" aria-label="Thêm nhóm phân loại từ thư viện"><option value="">+ Thêm nhóm phân loại…</option>${libs.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}</select>
+        <button class="btn btn-quiet btn-sm" type="button" data-act="g-custom">Nhóm phân loại riêng (gõ tay)</button>
+        <a class="g-lib" href="#thu-vien">Quản lý thư viện phân loại</a></div>
+      ${ui.gCustom != null ? `<div class="g-custom"><input id="g-custom-name" data-nokeep="1" data-gcustom="1" value="${esc(ui.gCustom)}" placeholder="Tên nhóm riêng, ví dụ: Kiểu khắc" autocomplete="off" aria-label="Tên nhóm riêng">
+        <button class="btn btn-cta btn-xs" type="button" data-act="g-custom-ok">Tạo nhóm</button><button class="link-btn" type="button" data-act="g-custom-no">Thôi</button></div>` : ''}`;
+  }
+
+  // Lưới tích nhanh: hàng = nhóm 1, cột = nhóm 2; từ nhóm 3 trở đi mỗi tổ hợp một lưới
+  function skuMatrix(db, p) {
+    const by = skuByOpts(p);
+    const G = p.groups;
+    const rest = restCombos(p);
+    const cell = x => `<input type="checkbox" class="sku-cell" data-nokeep="1" data-id="${esc(x.id)}"${x.on ? ' checked' : ''} aria-label="Đang bán ${esc(x.opts.join(' / '))}">`;
+    return rest.map((rc, ri) => {
+      const title = rc.length ? `<p class="mx-title">${rc.map(esc).join(' · ')}</p>` : '';
+      if (G.length === 1) {
+        return `<table class="mx">${G[0].values.map(v => { const x = by.get(P.skuKey([v])); return x ? `<tr><th scope="row"><button class="mx-h" type="button" data-act="sku-row" data-v="${esc(v)}" data-r="0">${esc(v)}</button></th><td>${cell(x)}</td></tr>` : ''; }).join('')}</table>`;
+      }
+      const head = G[1].values.map(c => `<th scope="col"><button class="mx-h" type="button" data-act="sku-col" data-v="${esc(c)}" data-r="${ri}">${esc(c)}</button></th>`).join('');
+      const rows = G[0].values.map(r => `<tr><th scope="row"><button class="mx-h" type="button" data-act="sku-row" data-v="${esc(r)}" data-r="${ri}">${esc(r)}</button></th>${G[1].values.map(c => { const x = by.get(P.skuKey([r, c].concat(rc))); return `<td>${x ? cell(x) : ''}</td>`; }).join('')}</tr>`).join('');
+      return `${title}<div class="tbl-wrap tbl-scroll"><table class="mx"><thead><tr><th><span class="mx-corner">${esc(P.groupName(db, G[0]))} \\ ${esc(P.groupName(db, G[1]))}</span></th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    }).join('');
+  }
+
+  function skuPanel(db, p) {
+    const total = p.skus.length, on = p.skus.filter(x => x.on).length;
+    const missing = p.groups.filter(g => !g.values.length);
+    const head = `<div class="panel-h"><h2>Giá theo tổ hợp <span class="muted">(${on} đang bán / ${total})</span></h2></div>`;
+    if (missing.length || !total) {
+      return `<section class="panel">${head}<p class="muted">Chọn ít nhất một giá trị ở ${missing.length ? 'nhóm ' + missing.map(g => '“' + esc(P.groupName(db, g)) + '”').join(', ') : 'mỗi nhóm'} để tạo bảng giá.</p><p class="err" id="err-pf-variants"></p></section>`;
+    }
+    const rows = p.skus.filter(x => x.on).map(x => `<tr>
+        <td data-label="Tổ hợp"><b>${esc(x.opts.join(' / '))}</b></td>
+        <td data-label="Giá" class="r"><div class="unit cell-unit"><input class="cell-in" id="sku-price-${esc(x.id)}" data-nokeep="1" data-sku="${esc(x.id)}" data-k="price" value="${x.price === '' ? '' : esc(fmt.num(x.price))}" inputmode="numeric" placeholder="0" autocomplete="off" aria-label="Giá ${esc(x.opts.join(' / '))}"><span>₫</span></div></td>
+        <td data-label="Tối thiểu" class="r"><input class="cell-in" data-nokeep="1" data-sku="${esc(x.id)}" data-k="minQty" value="${esc(x.minQty)}" inputmode="numeric" autocomplete="off" aria-label="Số lượng tối thiểu ${esc(x.opts.join(' / '))}"></td>
+      </tr>`).join('');
+    return `<section class="panel">${head}
+      <div class="mx-box"><div class="mx-h-row"><b>Tích nhanh phân loại đang bán</b><span class="muted">${on}/${total} đang bán · bấm tên hàng hoặc cột để bật tắt cả hàng hoặc cột</span></div>${skuMatrix(db, p)}</div>
+      ${on ? `<div class="bulk-fill"><input id="sku-bulk" data-nokeep="1" inputmode="numeric" placeholder="Giá chung" autocomplete="off" aria-label="Giá chung"><span class="muted">₫</span>
+        <button class="btn btn-quiet btn-xs" type="button" data-act="sku-fill-empty">Điền cho tổ hợp chưa có giá</button><button class="btn btn-quiet btn-xs" type="button" data-act="sku-fill-all">Điền cho tất cả đang bán</button></div>
+        <div class="tbl-wrap tbl-scroll"><table class="tbl skus"><thead><tr><th>Tổ hợp</th><th class="r">Giá</th><th class="r">Tối thiểu</th></tr></thead><tbody>${rows}</tbody></table></div>`
+        : '<p class="muted">Chưa có tổ hợp nào đang bán. Tích ít nhất một ô ở trên.</p>'}
+      <p class="err" id="err-pf-variants" style="margin-top:8px"></p></section>`;
+  }
+
+  // Giữ thứ tự giá trị theo danh sách gốc (thư viện hoặc nhóm riêng)
+  function sortValues(db, g) {
+    const opts = P.groupOptions(db, g);
+    g.values.sort((a, b) => opts.indexOf(a) - opts.indexOf(b));
+  }
+  function addCustomGroup() {
+    const name = String(ui.gCustom || '').trim();
+    if (!name) { P.ui.toast('Nhập tên nhóm.'); const n = document.getElementById('g-custom-name'); if (n) n.focus(); return; }
+    const p = ui.prod;
+    if (!p.groups.length) p._flat = p.variants;
+    p.groups.push({ id: P.uid('g'), name, libId: '', values: [], options: [] });
+    ui.gCustom = null;
+    syncSkus(); render();
+    const n = document.getElementById('gopt-' + (p.groups.length - 1)); if (n) n.focus();
+  }
+  function addCustomValue(gi) {
+    const g = ui.prod.groups[gi]; const el = document.getElementById('gopt-' + gi);
+    if (!g || !el) return;
+    const v = el.value.trim();
+    if (!v) return;
+    if ((g.options || []).includes(v)) { P.ui.toast('Giá trị này đã có.'); return; }
+    g.options = (g.options || []).concat(v); g.values = g.values.concat(v);
+    syncSkus(); render();
+    const n = document.getElementById('gopt-' + gi); if (n) n.focus();
   }
 
   function newVariant() { return { id: P.uid('v'), name: '', price: '', minQty: 1 }; }
@@ -610,9 +682,9 @@
     if (id) {
       const p = P.findProduct(db, id);
       ui.prod = p ? JSON.parse(JSON.stringify(p)) : null;
-      if (ui.prod) ui.prod._key = key;
+      if (ui.prod) { ui.prod._key = key; ui.prod.groups = ui.prod.groups || []; ui.prod.skus = ui.prod.skus || []; }
     } else {
-      ui.prod = { _key: key, _new: true, id: P.uid('sp'), catId: ui.pcat !== 'all' ? ui.pcat : ((db.categories[0] || {}).id || ''), name: '', desc: '', leadDays: 7, variants: [newVariant()], images: [], active: true };
+      ui.prod = { _key: key, _new: true, id: P.uid('sp'), catId: ui.pcat !== 'all' ? ui.pcat : ((db.categories[0] || {}).id || ''), name: '', desc: '', leadDays: 7, variants: [newVariant()], groups: [], skus: [], images: [], active: true };
     }
   }
 
@@ -646,13 +718,19 @@
                 <textarea id="pf-desc" ${b} data-k="desc" rows="4" placeholder="Chất liệu, kỹ thuật in, lưu ý khi gửi file…">${esc(p.desc)}</textarea></div>
             </div>
           </section>
-          <section class="panel"><div class="panel-h"><h2>Phân loại và giá</h2><span class="muted">${p.variants.length} phân loại</span></div>
-            <p class="hint" style="margin-bottom:12px">Mỗi phân loại có giá riêng, ví dụ theo kích thước, chất liệu, số mặt in. Phân loại thêm tay ở đây chỉ thuộc sản phẩm này, không lưu cho sản phẩm khác.</p>
-            ${quickBox(db)}
+          ${p.groups.length ? `<section class="panel"><div class="panel-h"><h2>Phân loại</h2><span class="muted">${p.groups.length} nhóm</span></div>
+              <p class="hint" style="margin-bottom:12px">Chọn các giá trị bán ở từng nhóm, web tự ghép thành các tổ hợp để bạn đặt giá. Nhóm riêng gõ tay chỉ nằm trong sản phẩm này, không lưu vào thư viện.</p>
+              ${p.groups.map((g, gi) => groupBox(db, p, g, gi)).join('')}
+              ${groupControls(db, p)}
+            </section>${skuPanel(db, p)}`
+          : `<section class="panel"><div class="panel-h"><h2>Phân loại và giá</h2><span class="muted">${p.variants.length} phân loại</span></div>
+            <p class="hint" style="margin-bottom:12px">Phân loại đơn giản: mỗi dòng một phân loại với giá riêng. Cần nhiều lựa chọn (chất liệu × màu, số lượng…)? Thêm nhóm phân loại ở dưới, web sẽ tự ghép bảng giá theo tổ hợp.</p>
             <div class="vrows">${vrows}</div>
             <p class="err" id="err-pf-variants" style="margin-top:8px"></p>
             <div class="actions" style="margin-top:12px"><button class="btn btn-quiet btn-sm" type="button" data-act="v-add">+ Thêm phân loại</button></div>
-          </section>
+            <h3 class="sec-title">Hoặc dùng nhóm phân loại</h3>
+            ${groupControls(db, p)}
+          </section>`}
         </div>
         <div class="stack">
           <section class="panel"><div class="panel-h"><h2>Ảnh sản phẩm</h2></div>
@@ -766,6 +844,10 @@
   }
 
   // ==== Đơn in: đơn shop đặt xưởng Trung Quốc, gom từ các đơn khách ====
+  // Tìm đơn khách theo mã, tên, số điện thoại, tên sản phẩm. Gõ không dấu cũng ra.
+  const fold = t => String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+  const orderText = o => fold([o.id, o.name, o.phone, o.social, (o.items || []).map(i => i.productName + ' ' + (i.variantName || '')).join(' ')].join(' '));
+  const orderMatches = (o, q) => { const k = fold(q).trim(); return !k || k.split(/\s+/).every(w => orderText(o).includes(w)); };
   function linesFromOrder(o, keep) {
     return o.items.map((it, i) => {
       const old = (keep || []).find(l => l.orderId === o.id && l.itemIndex === i);
@@ -799,7 +881,8 @@
     const picked = new Set(j.lines.map(l => l.orderId));
     const cands = db.orders.filter(o => P.printable(db, o, ui.jEdit === 'new' ? null : j.id))
       .sort((a, b2) => (picked.has(b2.id) - picked.has(a.id)) || (P.needsPrint(db, b2) - P.needsPrint(db, a)) || b2.createdAt - a.createdAt);
-    const orderRows = cands.map(o => `<label class="jo${picked.has(o.id) ? ' on' : ''}">
+    const shown = cands.filter(o => picked.has(o.id) || orderMatches(o, ui.joq));
+    const orderRows = shown.map(o => `<label class="jo${picked.has(o.id) ? ' on' : ''}">
         <input type="checkbox" class="jo-pick" ${b} value="${esc(o.id)}"${picked.has(o.id) ? ' checked' : ''}>
         <span class="jo-main"><b>${esc(o.id)}</b> · ${esc(o.name)}<small>${o.items.map(it => esc(it.productName) + ' × ' + fmt.num(it.qty)).join(' · ')}</small></span>
         <span class="jo-tags">${P.needsPrint(db, o) ? '<span class="pill act">Chưa đặt in</span>' : P.pill(o, 'admin')}</span>
@@ -820,7 +903,8 @@
     return `<form id="j-form" class="panel lead" novalidate style="margin-bottom:20px">
       <div class="panel-h"><h2>${ui.jEdit === 'new' ? 'Tạo đơn in' : 'Sửa đơn in ' + esc(j.code || '')}</h2></div>
       <h3 class="sec-title">1. Chọn đơn khách</h3>
-      ${cands.length ? `<div class="jo-list">${orderRows}</div>` : '<p class="muted">Không còn đơn khách nào chờ đặt in.</p>'}
+      ${cands.length ? `<label class="sr-only" for="jo-search">Tìm đơn khách</label><input class="search" id="jo-search" type="search" placeholder="Gõ tên khách hoặc tên sản phẩm để tìm đơn…" value="${esc(ui.joq)}" autocomplete="off" style="width:100%;margin-bottom:10px">
+        ${shown.length ? `<div class="jo-list">${orderRows}</div>` : `<p class="muted">Không có đơn nào khớp “${esc(ui.joq)}”.</p>`}` : '<p class="muted">Không còn đơn khách nào chờ đặt in.</p>'}
       <h3 class="sec-title">2. Sản phẩm đặt in</h3>
       ${j.lines.length ? `<div class="tbl-wrap tbl-scroll"><table class="tbl jlines"><thead><tr><th>Đơn khách</th><th>Sản phẩm</th><th class="r">SL in</th><th class="r">Đơn giá tệ</th><th class="r">Quy đổi VNĐ</th></tr></thead><tbody>${lineRows}</tbody></table></div>
         <p class="jtotal" id="j-total" aria-live="polite">${jobTotalText(j)}</p>`
@@ -880,6 +964,7 @@
     const shipSum = sum(jobs, j => { const s = P.shipQuote(whOf(j.whId), j.kg); return s && s.ok ? s.cost : 0; });
     const noPrint = db.orders.filter(o => P.needsPrint(db, o)).sort((a, b) => a.createdAt - b.createdAt);
     ui.npPicked = new Set([...ui.npPicked].filter(id => noPrint.some(o => o.id === id)));
+    const npShown = noPrint.filter(o => ui.npPicked.has(o.id) || orderMatches(o, ui.npq));
 
     const rows = list.map(j => {
       const c = P.jobCost(j);
@@ -905,7 +990,8 @@
 
     const noPrintBox = ui.jEdit ? '' : `<section class="panel${noPrint.length ? ' lead' : ''}" style="margin-bottom:18px">
       <div class="panel-h"><h2>Đơn khách chưa đặt in</h2><span class="muted">Đã thanh toán, đang chờ shop đặt xưởng</span></div>
-      ${noPrint.length ? `<div class="jo-list">${noPrint.map(o => `<label class="jo${ui.npPicked.has(o.id) ? ' on' : ''}">
+      ${noPrint.length ? `<label class="sr-only" for="np-search">Tìm đơn chưa đặt in</label><input class="search" id="np-search" type="search" placeholder="Gõ tên khách hoặc tên sản phẩm để tìm đơn…" value="${esc(ui.npq)}" autocomplete="off" style="width:100%;margin-bottom:10px">
+        ${npShown.length ? '' : `<p class="muted">Không có đơn nào khớp “${esc(ui.npq)}”.</p>`}<div class="jo-list">${npShown.map(o => `<label class="jo${ui.npPicked.has(o.id) ? ' on' : ''}">
           <input type="checkbox" class="np-pick" data-nokeep="1" value="${esc(o.id)}"${ui.npPicked.has(o.id) ? ' checked' : ''}>
           <span class="jo-main"><b>${esc(o.id)}</b> · ${esc(o.name)}<small>${o.items.map(it => esc(it.productName) + ' × ' + fmt.num(it.qty)).join(' · ')}</small></span>
           <span class="jo-tags muted">${fmt.ago(o.produceStart || o.updatedAt)}</span></label>`).join('')}</div>
@@ -1155,6 +1241,33 @@
       </form>`;
   }
 
+  // ==== Phân loại: thư viện các nhóm dùng chung cho mọi sản phẩm ====
+  const ICON_EDIT = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
+  const ICON_TRASH = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>';
+
+  function viewLibrary(db) {
+    const libs = db.variantLib || [];
+    const usedBy = id => db.products.filter(p => (p.groups || []).some(g => g.libId === id)).length;
+    const boxes = libs.map(g => {
+      const head = ui.libEdit === g.id
+        ? `<form class="lib-rename" data-librename="${esc(g.id)}" novalidate><label class="sr-only" for="lib-name-${esc(g.id)}">Tên nhóm</label><input id="lib-name-${esc(g.id)}" data-nokeep="1" value="${esc(g.name)}" autocomplete="off"><button class="btn btn-cta btn-xs" type="submit">Lưu</button><button class="link-btn" type="button" data-act="lib-edit-no">Thôi</button></form>`
+        : `<h2>${esc(g.name)}</h2><span class="lib-tools"><button class="icon-btn" type="button" data-act="lib-edit" data-id="${esc(g.id)}" aria-label="Đổi tên nhóm ${esc(g.name)}">${ICON_EDIT}</button><button class="icon-btn" type="button" data-act="lib-del-ask" data-id="${esc(g.id)}" aria-label="Xóa nhóm ${esc(g.name)}">${ICON_TRASH}</button></span>`;
+      const confirm = ui.libDel === g.id
+        ? `<div class="confirm"><p>Xóa nhóm “${esc(g.name)}”? ${usedBy(g.id) ? usedBy(g.id) + ' sản phẩm đang dùng vẫn giữ các giá trị đã chọn.' : ''}</p><div class="actions" style="margin-top:0"><button class="btn btn-danger btn-sm" type="button" data-act="lib-del-yes" data-id="${esc(g.id)}">Xóa nhóm</button><button class="btn btn-quiet btn-sm" type="button" data-act="lib-del-no">Không</button></div></div>` : '';
+      return `<section class="panel libbox">
+        <div class="lib-h">${head}</div>${confirm}
+        <div class="gchips">${g.values.map((v, i) => `<span class="gchip tag"><span class="vchip-s">${esc(v)}</span><button class="gchip-x" type="button" data-act="lib-val-rm" data-id="${esc(g.id)}" data-i="${i}" aria-label="Xóa giá trị ${esc(v)}">×</button></span>`).join('') || '<span class="muted">Chưa có giá trị nào.</span>'}</div>
+        <form class="g-addval" data-libform="${esc(g.id)}" novalidate><input data-nokeep="1" id="lib-val-${esc(g.id)}" placeholder="Thêm lựa chọn cho ${esc(g.name)}…" autocomplete="off" aria-label="Thêm lựa chọn cho ${esc(g.name)}"><button class="btn btn-quiet btn-sm" type="submit">Thêm</button></form>
+      </section>`;
+    }).join('');
+    return `<div class="page-head"><div><h1>Phân loại</h1><p>Nhóm dùng chung như Chất liệu, Màu, Số lượng. Khi tạo sản phẩm bạn chọn nhóm từ đây. Gõ nhiều lựa chọn cách nhau bằng dấu phẩy để thêm một lần.</p></div></div>
+      <form id="lib-new-form" class="lib-new" novalidate><label class="sr-only" for="lib-new-name">Tên nhóm phân loại mới</label>
+        <input id="lib-new-name" data-nokeep="1" placeholder="Tên nhóm phân loại mới, VD: Màu, Size, Chất liệu…" autocomplete="off"><button class="btn btn-cta btn-sm" type="submit">+ Thêm nhóm</button></form>
+      <p class="err" id="err-lib-new-name"></p>
+      ${boxes ? `<div class="lib-grid">${boxes}</div>` : '<div class="panel empty"><h3>Chưa có nhóm nào</h3><p>Thêm nhóm đầu tiên ở trên.</p></div>'}
+      <p class="hint" style="margin-top:14px">Nhóm gõ tay ngay trong từng sản phẩm thì không vào đây. Xóa một lựa chọn hoặc cả nhóm ở đây không làm mất lựa chọn sản phẩm đã chọn.</p>`;
+  }
+
   // ==== Cài đặt ====
   function viewSettings(db) {
     const s = db.settings;
@@ -1277,11 +1390,11 @@
       case 'oe-open': ui.oEdit = true; lastRoute = ''; render(); { const n = document.getElementById('oe-name'); if (n) n.focus(); } return;
       case 'oe-cancel': ui.oEdit = false; render(); return;
       // Đơn in
-      case 'j-new': ui.jEdit = 'new'; ui.jDraft = null; ui.jPre = null; ui.jDel = null; render(); toTop(); return;
+      case 'j-new': ui.joq = ''; ui.jEdit = 'new'; ui.jDraft = null; ui.jPre = null; ui.jDel = null; render(); toTop(); return;
       case 'j-edit': ui.jEdit = t.dataset.id; ui.jDraft = null; ui.jDel = null; render(); toTop(); return;
       case 'j-cancel': ui.jEdit = null; ui.jDraft = null; render(); return;
       case 'j-from-np': ui.jPre = [...ui.npPicked]; ui.npPicked = new Set(); render(); toTop(); return;
-      case 'np-all': ui.npPicked = new Set(db.orders.filter(o => P.needsPrint(db, o)).map(o => o.id)); render(); return;
+      case 'np-all': ui.npPicked = new Set(db.orders.filter(o => P.needsPrint(db, o) && orderMatches(o, ui.npq)).map(o => o.id)); render(); return;
       case 'j-from-order': ui.jPre = [route().id]; go('don-in'); return;
       case 'j-edit-go': ui.jOpen = t.dataset.id; go('don-in'); return;
       case 'j-del-ask': ui.jDel = t.dataset.id; render(); return;
@@ -1301,33 +1414,54 @@
       case 'lk-avatar-rm': ui.look.avatar = ''; render(); return;
       case 'lk-reset': { const keepAvatar = ui.look.avatar; ui.look = Object.assign(P.baseLook(), { avatar: keepAvatar }); render(); return; }
       case 'lk-undo': ui.look = null; render(); P.ui.toast('Đã trả về bản đang lưu.'); return;
-      // Phân loại nhanh theo số lượng
-      case 'qk-toggle': ui.qk.open = !ui.qk.open; render(); return;
-      case 'qk-preset': {
-        const x = P.qtyPresets(db).find(y => y.id === t.dataset.id);
-        if (x) { ui.qk.tiers = x.tiers.join(', '); if (x.unit) ui.qk.unit = x.unit; }
+      // Nhóm phân loại và SKU
+      case 'g-custom': ui.gCustom = ''; render(); { const n = document.getElementById('g-custom-name'); if (n) n.focus(); } return;
+      case 'g-custom-no': ui.gCustom = null; render(); return;
+      case 'g-custom-ok': addCustomGroup(); return;
+      case 'g-toggle': {
+        const g = ui.prod.groups[+t.dataset.g]; if (!g) return;
+        const o = P.groupOptions(db, g)[i]; if (o == null) return;
+        g.values = g.values.includes(o) ? g.values.filter(v => v !== o) : g.values.concat(o);
+        sortValues(db, g); syncSkus(); render(); return;
+      }
+      case 'g-all': { const g = ui.prod.groups[+t.dataset.g]; if (g) { g.values = P.groupOptions(db, g).slice(); syncSkus(); render(); } return; }
+      case 'g-none': { const g = ui.prod.groups[+t.dataset.g]; if (g) { g.values = []; syncSkus(); render(); } return; }
+      case 'g-del': {
+        ui.prod.groups.splice(+t.dataset.g, 1);
+        if (!ui.prod.groups.length) { ui.prod.skus = []; ui.prod.variants = ui.prod._flat && ui.prod._flat.length ? ui.prod._flat : [newVariant()]; } else syncSkus();
         render(); return;
       }
-      case 'qk-del': P.update(d => P.act.deleteVariantPreset(d, t.dataset.id)); render(); P.ui.toast('Đã xóa mẫu.'); return;
-      case 'qk-save': {
-        const tiers = P.parseTiers(ui.qk.tiers);
-        const name = ui.qk.pname.trim();
-        if (!tiers.length) { setErr('qk', 'Nhập ít nhất một mức số lượng.'); return; }
-        if (!name) { setErr('qk', 'Nhập tên cho mẫu mới.'); const n = document.getElementById('qk-pname'); if (n) n.focus(); return; }
-        P.update(d => P.act.saveVariantPreset(d, { id: P.uid('q'), name, unit: ui.qk.unit.trim(), tiers }));
-        ui.qk.pname = ''; render(); P.ui.toast('Đã lưu mẫu “' + name + '”. Dùng lại cho sản phẩm khác ở mục này.'); return;
+      case 'g-opt-add': addCustomValue(+t.dataset.g); return;
+      case 'g-opt-rm': {
+        const g = ui.prod.groups[+t.dataset.g]; if (!g) return;
+        const o = P.groupOptions(db, g)[i];
+        g.options = (g.options || []).filter(v => v !== o); g.values = g.values.filter(v => v !== o);
+        syncSkus(); render(); return;
       }
-      case 'qk-gen': {
-        const tiers = P.parseTiers(ui.qk.tiers);
-        if (!tiers.length) { setErr('qk', 'Nhập ít nhất một mức số lượng.'); return; }
-        const made = P.qtyVariants(tiers, ui.qk.unit, P.parseNum(ui.qk.price), ui.qk.prefix);
-        const keep = ui.prod.variants.filter(v => String(v.name).trim() || v.price !== '');
-        const have = new Set(keep.map(v => String(v.name).trim().toLowerCase()));
-        const add = made.filter(v => !have.has(v.name.toLowerCase()));
-        ui.prod.variants = keep.concat(add);
-        render();
-        P.ui.toast(add.length ? 'Đã tạo ' + add.length + ' phân loại.' + (add.length < made.length ? ' Bỏ ' + (made.length - add.length) + ' mức đã có.' : '') + (ui.qk.price.trim() ? '' : ' Điền giá cho từng phân loại nhé.') : 'Các phân loại này đã có trong sản phẩm.');
-        return;
+      case 'sku-row': case 'sku-col': {
+        const p = ui.prod, ri = +t.dataset.r, v = t.dataset.v, pos = a === 'sku-row' ? 0 : 1;
+        const rc = restCombos(p)[ri] || [];
+        const rk = P.skuKey(rc);
+        const hit = p.skus.filter(x => x.opts[pos] === v && P.skuKey(x.opts.slice(2)) === rk);
+        const allOn = hit.length && hit.every(x => x.on);
+        hit.forEach(x => { x.on = !allOn; });
+        render(); return;
+      }
+      case 'sku-fill-empty': case 'sku-fill-all': {
+        const price = P.parseNum((document.getElementById('sku-bulk') || {}).value);
+        if (!(price >= 0)) { P.ui.toast('Nhập giá chung trước, ví dụ 90.000.'); return; }
+        ui.prod.skus.forEach(x => { if (x.on && (a === 'sku-fill-all' || x.price === '')) x.price = Math.round(price); });
+        render(); return;
+      }
+      // Thư viện phân loại
+      case 'lib-edit': ui.libEdit = t.dataset.id; ui.libDel = null; render(); { const n = document.getElementById('lib-name-' + t.dataset.id); if (n) { n.focus(); n.select(); } } return;
+      case 'lib-edit-no': ui.libEdit = null; render(); return;
+      case 'lib-del-ask': ui.libDel = t.dataset.id; ui.libEdit = null; render(); return;
+      case 'lib-del-no': ui.libDel = null; render(); return;
+      case 'lib-del-yes': P.update(d => P.act.deleteVarGroup(d, t.dataset.id)); ui.libDel = null; done('Đã xóa nhóm khỏi thư viện. Sản phẩm đang dùng vẫn giữ nguyên các giá trị đã chọn.'); return;
+      case 'lib-val-rm': {
+        P.update(d => { const g = P.libGroup(d, t.dataset.id); if (g) g.values.splice(i, 1); });
+        render(); return;
       }
       // Thao tác hàng loạt
       case 'bulk-ask': ui.bulkTo = document.getElementById('bulk-status').value; ui.bulkAsk = true; render(); return;
@@ -1436,6 +1570,11 @@
   });
 
   app.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.isComposing) {
+      const el = e.target;
+      if (el.dataset && el.dataset.gopt != null) { e.preventDefault(); addCustomValue(+el.dataset.gopt); return; }
+      if (el.dataset && el.dataset.gcustom) { e.preventDefault(); addCustomGroup(); return; }
+    }
     if (e.target.id === 'chat-input' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       document.getElementById('chat-form').requestSubmit();
@@ -1447,6 +1586,8 @@
     if (el.id === 'o-search') { ui.q = el.value; render(); return true; }
     if (el.id === 'p-search') { ui.pq = el.value; render(); return true; }
     if (el.id === 'j-search') { ui.jq = el.value; render(); return true; }
+    if (el.id === 'jo-search') { ui.joq = el.value; render(); return true; }
+    if (el.id === 'np-search') { ui.npq = el.value; render(); return true; }
     return false;
   }
   app.addEventListener('compositionend', e => { onSearch(e.target); });
@@ -1495,7 +1636,7 @@
   app.addEventListener('input', e => {
     const el = e.target;
     const id = el.id;
-    if (id === 'o-search' || id === 'p-search' || id === 'j-search') { if (!e.isComposing) onSearch(el); return; }
+    if (id === 'o-search' || id === 'p-search' || id === 'j-search' || id === 'jo-search' || id === 'np-search') { if (!e.isComposing) onSearch(el); return; }
     if (el.dataset.jl || el.dataset.jf) { bindJob(el); updateJobOut(); setErr('j-lines', ''); return; }
     if (el.dataset.fe && ui.feDraft) {
       const k = el.dataset.fe;
@@ -1503,7 +1644,16 @@
       if (k === 'amount') updateFeeOut();
       setErr('fe-' + k, ''); return;
     }
-    if (el.dataset.qk) { ui.qk[el.dataset.qk] = el.value; const out = document.getElementById('qk-out'); if (out) out.textContent = qkText(); setErr('qk', ''); return; }
+    if (el.dataset.sku && ui.prod) {
+      const x = ui.prod.skus.find(y => y.id === el.dataset.sku);
+      if (x) {
+        const k = el.dataset.k;
+        if (k === 'price') x.price = el.value.trim() === '' ? '' : (P.parseNum(el.value) >= 0 ? P.parseNum(el.value) : '');
+        else if (k === 'minQty') x.minQty = parseInt(el.value.replace(/\D/g, ''), 10) || '';
+      }
+      setErr('pf-variants', ''); return;
+    }
+    if (el.dataset.gcustom) { ui.gCustom = el.value; return; }
     if (id === 'lg-kg') { ui.lKg = el.value; const out = document.getElementById('lg-out'); if (out) out.innerHTML = quoteRows(P.load()); return; }
     if (id === 'sh-kg') { updateShipQuote(); return; }
     if (el.dataset.lbind) { bindLogistic(el); if (id === 'lf-name') setErr('lf-name', ''); if (el.dataset.r) setErr('lf-rates', ''); return; }
@@ -1548,9 +1698,23 @@
       if (el.dataset.fe === 'amount' && el.value.trim() !== '') { const n = P.parseNum(el.value); if (n >= 0) el.value = fmt.num(n); }
       return;
     }
-    if (el.dataset.qk) {
-      if (el.dataset.qk === 'price' && el.value.trim() !== '') { const n = P.parseNum(el.value); if (n >= 0) { el.value = fmt.num(n); ui.qk.price = fmt.num(n); } }
+    if (el.dataset.sku) {
+      if (el.dataset.k === 'price' && el.value.trim() !== '') { const n = P.parseNum(el.value); if (n >= 0) el.value = fmt.num(n); }
       return;
+    }
+    if (el.classList.contains('sku-cell') && ui.prod) {
+      const x = ui.prod.skus.find(y => y.id === el.dataset.id);
+      if (x) { x.on = el.checked; render(); }
+      return;
+    }
+    if (id === 'g-add-lib' && ui.prod) {
+      const lib = P.libGroup(P.load(), el.value);
+      if (lib) {
+        if (!ui.prod.groups.length) ui.prod._flat = ui.prod.variants;
+        ui.prod.groups.push({ id: P.uid('g'), name: lib.name, libId: lib.id, values: [] });
+        syncSkus();
+      }
+      render(); return;
     }
     // Giao diện
     if (ui.look && el.dataset.lshow) { ui.look.show[el.dataset.lshow] = el.checked; P.applyLook(ui.look); return; }
@@ -1645,6 +1809,36 @@
       ui.jEdit = null; ui.jDraft = null;
       const n = new Set(clean.lines.map(l => l.orderId)).size;
       done((isNew ? 'Đã tạo đơn in ' : 'Đã lưu đơn in ') + (code || '') + ' cho ' + n + ' đơn khách.');
+      return;
+    }
+
+    if (f.id === 'lib-new-form') {
+      const name = val('lib-new-name').trim();
+      setErr('lib-new-name', '');
+      if (!name) { setErr('lib-new-name', 'Nhập tên nhóm.'); document.getElementById('lib-new-name').focus(); return; }
+      if ((P.load().variantLib || []).some(g => g.name.toLowerCase() === name.toLowerCase())) { setErr('lib-new-name', 'Đã có nhóm tên này.'); return; }
+      P.update(d => P.act.saveVarGroup(d, { id: P.uid('lib'), name, values: [] }));
+      render();
+      const n = document.querySelector('.libbox input[data-libname]'); 
+      const last = [...document.querySelectorAll('.g-addval input[id^="lib-val-"]')].pop(); if (last) last.focus();
+      return;
+    }
+    if (f.dataset.librename) {
+      const id = f.dataset.librename;
+      const name = val('lib-name-' + id).trim();
+      if (!name) { P.ui.toast('Tên nhóm không được để trống.'); return; }
+      if ((P.load().variantLib || []).some(g => g.id !== id && g.name.toLowerCase() === name.toLowerCase())) { P.ui.toast('Đã có nhóm tên này.'); return; }
+      P.update(d => { const g = P.libGroup(d, id); if (g) g.name = name; });
+      ui.libEdit = null; done('Đã đổi tên nhóm.'); return;
+    }
+    if (f.dataset.libform) {
+      const id = f.dataset.libform;
+      const el = document.getElementById('lib-val-' + id);
+      const vals = el.value.split(',').map(x => x.trim()).filter(Boolean);
+      if (!vals.length) return;
+      P.update(d => { const g = P.libGroup(d, id); if (g) vals.forEach(v => { if (!g.values.includes(v)) g.values.push(v); }); });
+      render();
+      const again = document.getElementById('lib-val-' + id); if (again) again.focus();
       return;
     }
 
@@ -1767,20 +1961,37 @@
       let ok = true;
       setErr('pf-name', ''); setErr('pf-variants', '');
       if (!p.name.trim()) { setErr('pf-name', 'Nhập tên sản phẩm.'); ok = false; }
-      const badV = p.variants.filter(v => !String(v.name).trim() || v.price === '' || !(v.price >= 0));
-      if (badV.length) {
-        setErr('pf-variants', 'Mỗi phân loại cần có tên và giá.');
-        badV.forEach(v => {
-          if (!String(v.name).trim()) document.getElementById('pv-name-' + v.id).setAttribute('aria-invalid', 'true');
-          if (v.price === '' || !(v.price >= 0)) document.getElementById('pv-price-' + v.id).setAttribute('aria-invalid', 'true');
-        });
-        ok = false;
+      const grouped = p.groups.length > 0;
+      if (grouped) {
+        const empty = p.groups.filter(g => !g.values.length);
+        const onSkus = p.skus.filter(x => x.on);
+        const noPrice = onSkus.filter(x => x.price === '' || !(x.price >= 0));
+        if (empty.length) { setErr('pf-variants', 'Mỗi nhóm cần chọn ít nhất một giá trị: ' + empty.map(g => P.groupName(P.load(), g)).join(', ') + '.'); ok = false; }
+        else if (!onSkus.length) { setErr('pf-variants', 'Cần ít nhất một tổ hợp đang bán. Tích ô ở bảng trên.'); ok = false; }
+        else if (noPrice.length) {
+          setErr('pf-variants', 'Mỗi tổ hợp đang bán cần có giá. Còn ' + noPrice.length + ' tổ hợp chưa có giá.');
+          noPrice.forEach(x => { const el = document.getElementById('sku-price-' + x.id); if (el) el.setAttribute('aria-invalid', 'true'); });
+          ok = false;
+        }
+      } else {
+        const badV = p.variants.filter(v => !String(v.name).trim() || v.price === '' || !(v.price >= 0));
+        if (badV.length) {
+          setErr('pf-variants', 'Mỗi phân loại cần có tên và giá.');
+          badV.forEach(v => {
+            if (!String(v.name).trim()) document.getElementById('pv-name-' + v.id).setAttribute('aria-invalid', 'true');
+            if (v.price === '' || !(v.price >= 0)) document.getElementById('pv-price-' + v.id).setAttribute('aria-invalid', 'true');
+          });
+          ok = false;
+        }
       }
       if (!ok) { const first = f.querySelector('[aria-invalid="true"]'); if (first) first.focus(); return; }
+      const dbNow = P.load();
       const clean = {
         id: p.id, catId: p.catId, name: p.name.trim(), desc: String(p.desc || '').trim(), leadDays: +p.leadDays || 0,
         images: p.images, active: !!p.active,
-        variants: p.variants.map(v => ({ id: v.id, name: String(v.name).trim(), price: Math.round(+v.price), minQty: Math.max(1, +v.minQty || 1) }))
+        groups: grouped ? p.groups.map(g => { const o = { id: g.id, name: P.groupName(dbNow, g), libId: g.libId || '', values: g.values.slice() }; if (!g.libId) o.options = (g.options || []).slice(); return o; }) : [],
+        skus: grouped ? p.skus.map(x => ({ id: x.id, key: x.key, opts: x.opts.slice(), on: !!x.on, price: x.price === '' ? '' : Math.round(+x.price), minQty: Math.max(1, +x.minQty || 1) })) : [],
+        variants: grouped ? P.variantsFromSkus(p.skus) : p.variants.map(v => ({ id: v.id, name: String(v.name).trim(), price: Math.round(+v.price), minQty: Math.max(1, +v.minQty || 1) }))
       };
       const isNew = p._new;
       P.update(d => P.act.saveProduct(d, clean));
@@ -1861,7 +2072,7 @@
     ui.confirm = null; ui.fEdit = null; ui.cEdit = null; ui.cDel = null; ui.dataAsk = null;
     ui.lEdit = null; ui.lDraft = null; ui.lDel = null; ui.bulkAsk = false;
     ui.jEdit = null; ui.jDraft = null; ui.jDel = null; ui.oEdit = false;
-    ui.feEdit = null; ui.feDraft = null; ui.feDel = null; ui.look = null;
+    ui.feEdit = null; ui.feDraft = null; ui.feDel = null; ui.look = null; ui.libDel = null; ui.libEdit = null; ui.gCustom = null;
     if (route().view !== 'product') ui.prod = null;
     render();
     window.scrollTo(0, 0);

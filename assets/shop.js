@@ -236,6 +236,8 @@
     }
     const v = p.variants.find(x => x.id === ui.sel.vid) || p.variants[0];
     if (v) ui.sel.vid = v.id;
+    // Sản phẩm dùng nhóm phân loại: khách chọn từng nhóm, mỗi tổ hợp đang bán có giá riêng
+    const grouped = (p.groups || []).length > 0 && p.variants.every(x => Array.isArray(x.opts));
     const min = v ? (+v.minQty || 1) : 1;
     if (ui.sel.qty < min) ui.sel.qty = min;
     const imgs = p.images || [];
@@ -253,10 +255,13 @@
           <div>${P.catTag(db, p.catId)}<h1>${esc(p.name)}</h1></div>
           ${v ? `<p class="pprice">${fmt.vnd(v.price)}</p>` : '<p class="muted">Sản phẩm đang cập nhật giá.</p>'}
           ${p.desc ? `<p class="pdesc">${esc(p.desc)}</p>` : ''}
-          ${v ? `<div><p class="lbl">Phân loại: <b>${esc(v.name)}</b></p>
+          ${v && grouped ? p.groups.map((g, gi) => `<div><p class="lbl">${esc(g.name)}: <b>${esc(v.opts[gi])}</b></p>
+            <div class="vchips" role="group" aria-label="${esc(g.name)}">${g.values.filter(val => p.variants.some(x => x.opts[gi] === val)).map(val =>
+              `<button type="button" class="vchip" data-act="opt" data-g="${gi}" data-v="${esc(val)}" aria-pressed="${v.opts[gi] === val}">${esc(val)}</button>`).join('')}</div></div>`).join('') : ''}
+          ${v && !grouped ? `<div><p class="lbl">Phân loại: <b>${esc(v.name)}</b></p>
             <div class="vchips" role="group" aria-label="Chọn phân loại">${p.variants.map(x =>
-              `<button type="button" class="vchip" data-act="variant" data-id="${esc(x.id)}" aria-pressed="${x.id === v.id}">${esc(x.name)}<small>${fmt.vnd(x.price)}${(+x.minQty || 1) > 1 ? ' · tối thiểu ' + fmt.num(x.minQty) : ''}</small></button>`).join('')}</div></div>
-          <div class="qty-row"><span class="lbl" id="q-lbl">Số lượng</span>
+              `<button type="button" class="vchip" data-act="variant" data-id="${esc(x.id)}" aria-pressed="${x.id === v.id}">${esc(x.name)}<small>${fmt.vnd(x.price)}${(+x.minQty || 1) > 1 ? ' · tối thiểu ' + fmt.num(x.minQty) : ''}</small></button>`).join('')}</div></div>` : ''}
+          ${v ? `<div class="qty-row"><span class="lbl" id="q-lbl">Số lượng</span>
             <div class="qty"><button type="button" data-act="qty-" aria-label="Giảm số lượng">−</button><input id="pq" inputmode="numeric" autocomplete="off" value="${ui.sel.qty}" aria-labelledby="q-lbl"><button type="button" data-act="qty+" aria-label="Tăng số lượng">+</button></div>
             ${min > 1 ? `<span class="hint">Tối thiểu ${fmt.num(min)}</span>` : ''}
             <span class="hint" id="pq-total" aria-live="polite">Thành tiền ${fmt.vnd(v.price * ui.sel.qty)}</span></div>
@@ -698,6 +703,13 @@
     const i = +t.dataset.i;
     switch (a) {
       case 'img': ui.sel.img = i; render(); return;
+      case 'opt': {
+        const { p, v } = currentVariant();
+        if (!p || !v) return;
+        const nv = P.pickVariant(p.variants, +t.dataset.g, t.dataset.v, v.opts);
+        if (nv) { ui.sel.vid = nv.id; if (ui.sel.qty < (+nv.minQty || 1)) ui.sel.qty = +nv.minQty || 1; }
+        render(); return;
+      }
       case 'variant': {
         ui.sel.vid = t.dataset.id;
         const { v } = currentVariant();
