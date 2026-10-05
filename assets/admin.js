@@ -664,7 +664,7 @@
         <button class="link-btn" type="button" data-act="imp-all">Chọn tất cả</button><button class="link-btn" type="button" data-act="imp-none">Bỏ chọn</button></div>` : '';
     return `<div class="imp">
       <div class="g-addval"><label class="sr-only" for="imp-url">Link bài đăng</label>
-        <input id="imp-url" data-nokeep="1" data-imp="url" value="${esc(m.url)}" placeholder="Dán link bài đăng hoặc trang có ảnh" autocomplete="off" inputmode="url">
+        <input id="imp-url" data-nokeep="1" data-imp="url" value="${esc(m.url)}" placeholder="Dán link (hoặc cả đoạn chia sẻ) của bài đăng hoặc trang có ảnh" autocomplete="off" inputmode="url">
         <button class="btn btn-quiet btn-sm" type="button" data-act="imp-scan"${m.busy ? ' disabled' : ''}>${m.busy && !m.found.length ? 'Đang tìm…' : 'Tìm ảnh'}</button></div>
       ${m.err ? `<p class="err" style="display:block">${esc(m.err)}</p>` : ''}${m.msg ? `<p class="hint">${esc(m.msg)}</p>` : ''}
       ${grid}
@@ -1451,13 +1451,15 @@
       case 'imp-scan': {
         const m = ui.imp, url = m.url.trim();
         if (!url) { m.err = 'Dán link bài đăng trước.'; m.msg = ''; render(); return; }
+        const links = P.imageImport.urlsIn(url);
         if (m.busy) return;
         m.busy = true; m.err = ''; m.msg = ''; m.found = []; m.picked = new Set(); render();
         P.imageImport.scan(url).then(list => {
           m.found = list;
           m.picked = new Set(list.slice(0, IMP_MAX).map((_, i) => i));
-          m.msg = list.length ? 'Tìm thấy ' + list.length + ' ảnh. Bỏ tích ảnh không cần rồi bấm lấy (tối đa ' + IMP_MAX + ' ảnh mỗi lần).' : 'Không tìm thấy ảnh nào trong link này. Trang có thể chặn hoặc cần đăng nhập.';
-        }, e => { m.err = P.errText(e); }).then(() => { m.busy = false; render(); });
+          m.msg = list.length ? 'Tìm thấy ' + list.length + ' ảnh. Bỏ tích ảnh không cần rồi bấm lấy (tối đa ' + IMP_MAX + ' ảnh mỗi lần).' : '';
+          if (!list.length) m.err = 'Không tìm thấy ảnh nào trong link này. ' + P.imageImport.hint(links);
+        }, e => { m.err = P.errText(e) + (/trang|ảnh|link/i.test(P.errText(e)) ? '' : ''); if (links.length) m.msg = P.imageImport.hint(links); }).then(() => { m.busy = false; render(); });
         return;
       }
       case 'imp-all': ui.imp.picked = new Set(ui.imp.found.slice(0, IMP_MAX).map((_, i) => i)); render(); return;
@@ -1467,7 +1469,7 @@
         const urls = m.found.filter((_, i) => m.picked.has(i));
         if (!urls.length || m.busy) return;
         m.busy = true; m.err = ''; render();
-        P.imageImport.save(urls, m.url.trim()).then(r => {
+        P.imageImport.save(urls, P.imageImport.urlsIn(m.url)[0] || '').then(r => {
           if (r.saved.length) {
             ui.prod.images = ui.prod.images.concat(r.saved);
             m.found = []; m.picked = new Set(); m.url = '';

@@ -1269,9 +1269,32 @@
     if (data && data.error) throw new Error(data.error);
     return data;
   }
+  // Dán nguyên đoạn chia sẻ (chữ, biểu tượng, link) cũng được: lấy ra các link trong đó
+  const urlsInText = t => [...new Set((String(t || '').match(/https?:\/\/[^\s<>"'“”‘’，。、）)]+/gi) || []).map(u => u.replace(/[.,;:!?]+$/, '')))];
+  // Gợi ý khi không lấy được ảnh, theo trang nguồn
+  function importHint(urls) {
+    const hosts = urls.map(u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } }).join(' ');
+    if (/xhslink|xiaohongshu/.test(hosts)) return 'Xiaohongshu chỉ hiện ảnh sau khi app chạy JavaScript, web không đọc được. Cách nhanh: mở bài trong app, lưu ảnh về điện thoại, rồi dùng nút Thêm ảnh (chọn nhiều ảnh một lúc).';
+    if (/facebook|fb\.com|fb\.watch|instagram|shopee|lazada|tiktokv?\./.test(hosts)) return 'Trang này thường chặn hoặc chỉ hiện ảnh sau khi đăng nhập. Hãy lưu ảnh về máy rồi dùng nút Thêm ảnh, hoặc dán link ảnh trực tiếp.';
+    return 'Trang này không để lộ ảnh cho máy chủ đọc. Hãy lưu ảnh về máy rồi dùng nút Thêm ảnh, hoặc dán link ảnh trực tiếp.';
+  }
   const imageImport = {
     available: () => CLOUD && adminOk,
-    scan: async url => (await callImageFn({ action: 'scan', url })).images || [],
+    urlsIn: urlsInText,
+    hint: importHint,
+    // Nhiều link thì quét từng link rồi gộp kết quả
+    scan: async text => {
+      const urls = urlsInText(text).slice(0, 6);
+      if (!urls.length) throw new Error('Không thấy link nào trong nội dung vừa dán. Link phải bắt đầu bằng https://');
+      const out = [];
+      let firstErr = null;
+      for (const url of urls) {
+        try { out.push(...((await callImageFn({ action: 'scan', url })).images || [])); } catch (e) { firstErr = firstErr || e; }
+      }
+      const uniq = [...new Set(out)];
+      if (!uniq.length && firstErr) throw firstErr;
+      return uniq;
+    },
     save: async (urls, referer) => { const r = await callImageFn({ action: 'import', urls, referer }); return { saved: r.saved || [], failed: r.failed || 0, lastError: r.lastError || '' }; }
   };
 
