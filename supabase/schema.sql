@@ -266,3 +266,8 @@ create policy product_images_read   on storage.objects for select using (bucket_
 create policy product_images_insert on storage.objects for insert to authenticated with check (bucket_id = 'product-images' and public.is_admin());
 create policy product_images_update on storage.objects for update to authenticated using (bucket_id = 'product-images' and public.is_admin());
 create policy product_images_delete on storage.objects for delete to authenticated using (bucket_id = 'product-images' and public.is_admin());
+
+-- Cố định search_path cho các hàm phụ
+alter function public.public_order(jsonb) set search_path = public;
+alter function public.norm_phone(text)    set search_path = public;
+alter function public.touch_updated_at()  set search_path = public;
