@@ -191,3 +191,10 @@ p{margin:0}
 
 /* Logo shop (assets/logo.png) */
 .brand-logo{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 0 0 2px var(--sheet),0 0 0 3.5px var(--sky)}
+/* Điện thoại: giữ trang cố định khi chạm vào ô nhập.
+   Trình duyệt iPhone tự phóng to nếu chữ trong ô nhập nhỏ hơn 16px, nên ép tối thiểu 16px (vẫn theo cỡ chữ lớn hơn nếu shop chọn). */
+html{touch-action:manipulation}
+@media (hover:none) and (pointer:coarse), (max-width:900px){
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
+  select,textarea{font-size:max(16px,1rem)!important}
+}
