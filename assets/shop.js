@@ -85,6 +85,7 @@
       }
     }
 
+    P.applyLook(db.settings.look);
     let body, title = '';
     switch (r.view) {
       case 'cat': body = viewCat(db, r.id); title = (P.findCategory(db, r.id) || {}).name; break;
@@ -118,12 +119,12 @@
     return `<header class="sh-head"><div class="wrap sh-row">
       <a class="brand" href="#gioi-thieu">${P.brandMark()}<span class="brand-word">${esc(s.shopName)}</span></a>
       <nav class="sh-nav" aria-label="Giới thiệu, danh mục in ấn, liên hệ">
-        <a href="#gioi-thieu"${cur(r.view === 'about')}>Giới thiệu</a>
-        ${db.categories.map(c => `<a href="#dm-${esc(c.id)}" data-ink="${esc(c.ink)}"${cur(activeCat === c.id)}><i></i>${esc(c.name)}</a>`).join('')}
-        <a href="#lien-he"${cur(r.view === 'contact')}>Liên hệ</a>
+        ${P.showSection(db, 'navAbout') ? `<a href="#gioi-thieu"${cur(r.view === 'about')}>Giới thiệu</a>` : ''}
+        ${P.showSection(db, 'navCats') ? P.visibleCategories(db).map(c => `<a href="#dm-${esc(c.id)}" data-ink="${esc(c.ink)}"${cur(activeCat === c.id)}><i></i>${esc(c.name)}</a>`).join('') : ''}
+        ${P.showSection(db, 'navContact') ? `<a href="#lien-he"${cur(r.view === 'contact')}>Liên hệ</a>` : ''}
       </nav>
       <div class="sh-tools">
-        <a class="sh-track" href="#theo-doi"${cur(r.view === 'track' || r.view === 'order')}>${ICON.track}<span>Theo dõi đơn</span></a>
+        ${P.showSection(db, 'navTrack') ? `<a class="sh-track" href="#theo-doi"${cur(r.view === 'track' || r.view === 'order')}>${ICON.track}<span>Theo dõi đơn</span></a>` : ''}
         <a class="cart-btn" href="#gio-hang" aria-label="Giỏ hàng${n ? ', ' + n + ' sản phẩm' : ''}"${cur(['cart', 'file', 'pay'].includes(r.view))}>${ICON.bag}${n ? `<span class="count">${n}</span>` : ''}</a>
       </div>
     </div></header>`;
@@ -131,16 +132,17 @@
 
   function footer(db) {
     const s = db.settings;
+    if (!P.showSection(db, 'footer')) return '';
     return `<footer class="sh-foot"><div class="wrap foot-grid">
-      <div><a class="brand" href="#gioi-thieu">${P.brandMark()}<span class="brand-word">${esc(s.shopName)}</span></a>${s.tagline ? `<p>${esc(s.tagline)}</p>` : ''}</div>
-      <div><h3>Liên hệ</h3><ul class="foot-list">
+      <div><a class="brand" href="#gioi-thieu">${P.brandMark()}<span class="brand-word">${esc(s.shopName)}</span></a>${s.tagline && P.showSection(db, 'tagline') ? `<p>${esc(s.tagline)}</p>` : ''}</div>
+      ${P.showSection(db, 'footContact') ? `<div><h3>Liên hệ</h3><ul class="foot-list">
         <li>Zalo: ${esc(fmt.phone(s.zalo))}</li>
         ${s.email ? `<li>${esc(s.email)}</li>` : ''}${s.hours ? `<li>${esc(s.hours)}</li>` : ''}${s.address ? `<li>${esc(s.address)}</li>` : ''}
-      </ul></div>
-      <div><h3>Danh mục in ấn</h3><ul class="foot-list">
-        ${db.categories.map(c => `<li><a href="#dm-${esc(c.id)}">${esc(c.name)}</a></li>`).join('')}
+      </ul></div>` : ''}
+      ${P.showSection(db, 'footCats') ? `<div><h3>Danh mục in ấn</h3><ul class="foot-list">
+        ${P.visibleCategories(db).map(c => `<li><a href="#dm-${esc(c.id)}">${esc(c.name)}</a></li>`).join('')}
         <li><a href="#theo-doi">Theo dõi tiến độ in</a></li>
-      </ul></div>
+      </ul></div>` : ''}
     </div><div class="wrap foot-bottom"><span>© ${new Date().getFullYear()} ${esc(s.shopName)}</span><a href="admin.html">Quản trị</a></div></footer>`;
   }
 
@@ -152,33 +154,34 @@
   function viewAbout(db) {
     const s = db.settings;
     const paras = String(s.about || '').split(/\n+/).filter(x => x.trim()).map(x => `<p>${esc(x)}</p>`).join('');
-    const first = db.categories[0];
+    const cats = P.visibleCategories(db);
+    const first = cats[0];
     const count = id => db.products.filter(p => p.active && p.catId === id).length;
     return `<section class="hero"><div class="wrap hero-in">
         <div>
-          ${s.tagline ? `<p class="eyebrow">${esc(s.tagline)}</p>` : ''}
+          ${s.tagline && P.showSection(db, 'tagline') ? `<p class="eyebrow">${esc(s.tagline)}</p>` : ''}
           <h1>${esc(s.shopName)}</h1>
           <div class="about">${paras}</div>
-          <div class="hero-actions">
+          ${P.showSection(db, 'heroBtns') ? `<div class="hero-actions">
             ${first ? `<a class="btn btn-cta" href="#dm-${esc(first.id)}">Xem sản phẩm</a>` : ''}
             <a class="btn btn-ghost" href="#theo-doi">Theo dõi tiến độ in</a>
-          </div>
+          </div>` : ''}
         </div>
-        ${P.hasLogo()
-          ? `<div class="hero-art hero-logo"><img src="${P.LOGO}" alt="Logo ${esc(s.shopName)}"></div>`
+        ${!P.showSection(db, 'heroArt') ? '' : P.hasLogo()
+          ? `<div class="hero-art hero-logo"><img src="${esc(P.logoSrc())}" alt="Logo ${esc(s.shopName)}"></div>`
           : `<div class="hero-art" aria-hidden="true"><div class="sheet">${CROPS}
           <div class="slug"><span>${esc(s.shopName)}</span><span>Bản in thử</span></div>
           <div class="plates"><span class="plate c"></span><span class="plate m"></span><span class="plate y"></span></div>
           ${BAR}
         </div></div>`}
       </div></section>
-      <section class="wrap sec" aria-labelledby="dm-title">
+      ${!P.showSection(db, 'catGrid') ? '' : `<section class="wrap sec" aria-labelledby="dm-title">
         <div class="sec-h"><h2 id="dm-title">Danh mục in ấn</h2><p>Chọn danh mục để xem sản phẩm và giá từng phân loại.</p></div>
-        ${db.categories.length ? `<div class="cat-grid">${db.categories.map(c => {
+        ${cats.length ? `<div class="cat-grid">${cats.map(c => {
           const n = count(c.id);
           return `<a class="cat-card" data-ink="${esc(c.ink)}" href="#dm-${esc(c.id)}"><span class="blob"></span><h3>${esc(c.name)}</h3>${c.desc ? `<p>${esc(c.desc)}</p>` : ''}<span class="cnt">${n ? n + ' sản phẩm' : 'Sắp có sản phẩm'} →</span></a>`;
         }).join('')}</div>` : '<div class="panel empty"><p>Shop đang cập nhật danh mục.</p></div>'}
-      </section>`;
+      </section>`}`;
   }
 
   // ==== Danh mục ====
@@ -201,13 +204,13 @@
 
   function viewCat(db, id) {
     const c = P.findCategory(db, id);
-    if (!c) return notFound('Không tìm thấy danh mục này', 'Danh mục có thể đã được đổi tên hoặc gỡ bỏ.');
+    if (!c || !P.catVisible(db, c.id)) return notFound('Không tìm thấy danh mục này', 'Danh mục có thể đã được đổi tên hoặc gỡ bỏ.');
     const list = sortProducts(db.products.filter(p => p.active && p.catId === c.id && p.variants.length));
     const sorts = [['new', 'Mới nhất'], ['low', 'Giá thấp → cao'], ['high', 'Giá cao → thấp'], ['name', 'Tên A → Z']];
     return `<div class="wrap page">
       <nav class="crumbs" aria-label="Đường dẫn"><a href="#gioi-thieu">Giới thiệu</a><span>/</span><span aria-current="page">${esc(c.name)}</span></nav>
       <div class="page-head"><div><h1>${esc(c.name)}</h1>${c.desc ? `<p>${esc(c.desc)}</p>` : ''}</div>
-        ${list.length > 1 ? `<div><label class="sr-only" for="sort">Sắp xếp</label><select class="sort" id="sort">${sorts.map(([v, l]) => `<option value="${v}"${ui.sort === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}</div>
+        ${list.length > 1 && P.showSection(db, 'sort') ? `<div><label class="sr-only" for="sort">Sắp xếp</label><select class="sort" id="sort">${sorts.map(([v, l]) => `<option value="${v}"${ui.sort === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}</div>
       ${list.length ? `<div class="pgrid">${list.map(p => pcard(db, p)).join('')}</div>`
         : `<div class="panel empty"><h3>Danh mục đang cập nhật sản phẩm</h3><p>Bạn cần in gì trong mục này, nhắn shop để được tư vấn.</p><a class="btn btn-ghost btn-sm" href="#lien-he">Liên hệ shop</a></div>`}
     </div>`;
@@ -249,11 +252,11 @@
             ${min > 1 ? `<span class="hint">Tối thiểu ${fmt.num(min)}</span>` : ''}
             <span class="hint" id="pq-total" aria-live="polite">Thành tiền ${fmt.vnd(v.price * ui.sel.qty)}</span></div>
           <div class="pbtns"><button class="btn btn-ghost" type="button" data-act="add">Thêm vào giỏ</button><button class="btn btn-cta" type="button" data-act="buy">Mua ngay</button></div>` : ''}
-          <ul class="pnotes">
+          ${P.showSection(db, 'pnotes') ? `<ul class="pnotes">
             ${p.leadDays ? `<li>In khoảng ${esc(p.leadDays)} ngày, cộng thời gian vận chuyển</li>` : ''}
             <li>Bạn gửi file thiết kế qua link Google Drive ở bước đặt hàng</li>
             <li>${esc(payRule(db.settings))}</li>
-          </ul>
+          </ul>` : ''}
         </div>
       </div></div>`;
   }

@@ -163,6 +163,64 @@
     return !j || j.id === exceptJobId;
   }
 
+  // ==== Phụ phí đơn in: một khoản chi chung cho nhiều đơn in, chia theo tỷ lệ cân nặng ====
+  // fee: { id, name, amount, jobIds[], note }. Ví dụ ship nội địa từ kho VN về nhà cho một lô 2-3 đơn in.
+  // Mỗi đơn in chịu: amount × cân đơn đó / tổng cân các đơn trong lô. Làm tròn đồng, phần dư dồn cho đơn nặng nhất.
+  function feeShares(fee, db) {
+    const amount = Math.round(+fee.amount || 0);
+    const jobs = (fee.jobIds || []).map(id => (db.printJobs || []).find(j => j.id === id)).filter(Boolean);
+    const rows = jobs.map(j => ({ jobId: j.id, kg: +j.kg > 0 ? +j.kg : 0, pct: 0, amount: 0 }));
+    const totalKg = rows.reduce((a, r) => a + r.kg, 0);
+    if (!rows.length || totalKg <= 0) return { ok: false, rows, totalKg, amount };
+    rows.forEach(r => { r.pct = r.kg / totalKg * 100; r.amount = Math.floor(amount * r.kg / totalKg); });
+    let rest = amount - rows.reduce((a, r) => a + r.amount, 0);
+    const order = rows.map((r, i) => i).filter(i => rows[i].kg > 0).sort((a, b) => rows[b].kg - rows[a].kg);
+    for (let k = 0; rest > 0 && order.length; k = (k + 1) % order.length, rest--) rows[order[k]].amount++;
+    return { ok: true, rows, totalKg, amount };
+  }
+  // Các khoản phụ phí đơn in này đang chịu: [{ fee, amount, kg, pct }]
+  function feesOfJob(db, jobId) {
+    const out = [];
+    (db.jobFees || []).forEach(f => {
+      if (!(f.jobIds || []).includes(jobId)) return;
+      const r = feeShares(f, db).rows.find(x => x.jobId === jobId);
+      if (r) out.push({ fee: f, amount: r.amount, kg: r.kg, pct: r.pct });
+    });
+    return out;
+  }
+  const jobFeeTotal = (db, jobId) => feesOfJob(db, jobId).reduce((a, x) => a + x.amount, 0);
+  // Giá vốn một đơn in: tiền hàng + ship TQ–VN theo bảng giá cân + phụ phí được chia
+  function jobFullCost(db, j) {
+    const goods = jobCost(j).totalVnd;
+    const sq = shipQuote((db.logistics || []).find(w => w.id === j.whId), j.kg);
+    const ship = sq && sq.ok ? sq.cost : 0;
+    const fee = jobFeeTotal(db, j.id);
+    return { goods, ship, fee, total: goods + ship + fee };
+  }
+
+  // ==== Phân loại nhanh theo số lượng ====
+  // Mẫu có sẵn dùng chung cho mọi sản phẩm. Phân loại thêm tay chỉ nằm trong sản phẩm đó, không đi vào mẫu.
+  const QTY_PRESETS = [
+    { id: 'q-nho', name: 'Số lượng nhỏ', unit: 'cái', tiers: [10, 20, 50, 100] },
+    { id: 'q-chuan', name: 'Thông dụng', unit: 'cái', tiers: [50, 100, 200, 500, 1000] },
+    { id: 'q-lon', name: 'Số lượng lớn', unit: 'cái', tiers: [500, 1000, 2000, 5000] }
+  ];
+  const qtyPresets = db => QTY_PRESETS.map(x => Object.assign({ builtin: true }, x)).concat(db.variantPresets || []);
+  // "50, 100  200;500" → [50, 100, 200, 500] (bỏ trùng, xếp tăng dần)
+  function parseTiers(s) {
+    const set = new Set(String(s || '').split(/[\s,;]+/).map(x => Math.round(parseNum(x))).filter(n => n > 0));
+    return [...set].sort((a, b) => a - b);
+  }
+  // Giá mỗi phân loại = đơn giá × số lượng (để trống nếu chưa nhập đơn giá, shop điền sau)
+  function qtyVariants(tiers, unit, unitPrice, prefix) {
+    const u = String(unit || '').trim();
+    const pre = String(prefix || '').trim();
+    return tiers.map(n => ({
+      id: uid('v'), name: (pre ? pre + ' · ' : '') + nf.format(n) + (u ? ' ' + u : ''),
+      price: +unitPrice > 0 ? Math.round(+unitPrice * n) : '', minQty: 1
+    }));
+  }
+
   // ==== Logistics: kho trung chuyển TQ–VN và bảng giá cân ====
   // rates: [{ id, from, to, price }] — giá theo kg; "to" để trống nghĩa là "trở lên"
   function findRate(w, kg) {
@@ -262,9 +320,119 @@
       facebook: '', instagram: '',
       payThreshold: 1000000, depositLow: 50, depositHigh: 70, lastRate: 3650,
       bankName: 'Vietcombank', bankNumber: '0000 000 000', bankHolder: 'PINYA PRINTING',
-      adminName: 'Pinya', adminEmail: 'admin@example.com'
+      adminName: 'Pinya', adminEmail: 'admin@example.com',
+      look: baseLook()
     };
   }
+
+  // ==== Giao diện tùy chỉnh: avatar, màu, font, cỡ chữ, mục hiển thị ====
+  // Mục "show": true là hiện. Khóa thiếu coi như hiện (để thêm mục mới sau này không làm mất trang).
+  const SHOW_KEYS = [
+    ['Thanh ngang', [['navAbout', 'Mục Giới thiệu'], ['navCats', 'Các danh mục in ấn'], ['navContact', 'Mục Liên hệ'], ['navTrack', 'Nút Theo dõi đơn']]],
+    ['Trang chủ', [['tagline', 'Dòng giới thiệu ngắn'], ['heroArt', 'Hình minh họa bên phải'], ['heroBtns', 'Hai nút Xem sản phẩm và Theo dõi'], ['catGrid', 'Lưới danh mục']]],
+    ['Danh mục và sản phẩm', [['sort', 'Ô sắp xếp sản phẩm'], ['pnotes', 'Ghi chú dưới sản phẩm (thời gian in, thanh toán)']]],
+    ['Chân trang', [['footer', 'Hiện chân trang'], ['footContact', 'Cột Liên hệ'], ['footCats', 'Cột Danh mục']]]
+  ];
+  function baseLook() {
+    return { avatar: '', theme: 'sky', mode: 'auto', font: 'default', size: 'md', show: {}, hiddenCats: [] };
+  }
+  function normLook(l) {
+    const b = baseLook();
+    l = l && typeof l === 'object' ? l : {};
+    return {
+      avatar: typeof l.avatar === 'string' ? l.avatar : '',
+      theme: THEMES[l.theme] ? l.theme : b.theme,
+      mode: ['auto', 'light', 'dark'].includes(l.mode) ? l.mode : b.mode,
+      font: FONTS[l.font] ? l.font : b.font,
+      size: SIZES[l.size] != null ? l.size : b.size,
+      show: Object.assign({}, l.show),
+      hiddenCats: Array.isArray(l.hiddenCats) ? l.hiddenCats.slice() : []
+    };
+  }
+  // Màu nhấn của web. "sky" là bộ mặc định trong base.css nên không ghi đè gì.
+  // dark: giá trị riêng khi ở chế độ tối.
+  const THEMES = {
+    sky: { name: 'Baby blue', dot: '#8FCBF0' },
+    pink: { name: 'Hồng phấn', dot: '#F5A3C7', sky: '#F5A3C7', deep: '#D6578F', soft: '#FDE3EE', wash: '#FEEFF5', text: '#B73C78', hover: '#F18DB8', onCta: '#4A1530', paper: '#FFF8FB', rule: '#F3DCE6',
+      dark: { deep: '#F08BB8', soft: '#3A1F2D', wash: '#2A1722', text: '#F6AFCF' } },
+    mint: { name: 'Bạc hà', dot: '#9ED9C3', sky: '#9ED9C3', deep: '#2F9C78', soft: '#DDF4EA', wash: '#EAF8F2', text: '#1F7A5B', hover: '#86CDB3', onCta: '#0E3326', paper: '#F6FCF9', rule: '#D8EBE3',
+      dark: { deep: '#7ACDAE', soft: '#17352B', wash: '#112820', text: '#8FDDBF' } },
+    lavender: { name: 'Tím lavender', dot: '#C7B9F2', sky: '#C7B9F2', deep: '#7A63CC', soft: '#EAE4FB', wash: '#F1EDFD', text: '#5F49B0', hover: '#B6A5EC', onCta: '#26194F', paper: '#FAF8FF', rule: '#E3DDF4',
+      dark: { deep: '#B3A3EC', soft: '#2A2347', wash: '#1F1A38', text: '#C9BDF5' } },
+    peach: { name: 'Cam đào', dot: '#F7C4A3', sky: '#F7C4A3', deep: '#D9772F', soft: '#FDE8D8', wash: '#FEF1E6', text: '#B35A16', hover: '#F2B085', onCta: '#4A2308', paper: '#FFFAF6', rule: '#F2E1D3',
+      dark: { deep: '#EDA06B', soft: '#3B2616', wash: '#2B1C10', text: '#F5BE94' } }
+  };
+  const THEME_VARS = ['--sky', '--sky-deep', '--sky-soft', '--sky-wash', '--accent-text', '--cta', '--cta-hover', '--on-cta', '--focus', '--paper', '--rule'];
+  const MODES = { auto: 'Theo thiết bị', light: 'Sáng', dark: 'Tối' };
+  // gf: tên họ font trên Google Fonts (đều có tiếng Việt). Bỏ trống nếu đã tải sẵn hoặc là font hệ thống.
+  const FONTS = {
+    default: { name: 'Mặc định (Quicksand + Nunito)' },
+    nunito: { name: 'Nunito, tròn và dễ đọc', display: '"Nunito"', body: '"Nunito"' },
+    vietnam: { name: 'Be Vietnam Pro, hiện đại', display: '"Be Vietnam Pro"', body: '"Be Vietnam Pro"', gf: 'Be+Vietnam+Pro:wght@400;500;600;700;800' },
+    lexend: { name: 'Lexend, rộng và thoáng', display: '"Lexend"', body: '"Lexend"', gf: 'Lexend:wght@400;500;600;700' },
+    montserrat: { name: 'Montserrat, gọn và mạnh', display: '"Montserrat"', body: '"Montserrat"', gf: 'Montserrat:wght@400;500;600;700;800' },
+    lora: { name: 'Lora, tiêu đề có chân', display: '"Lora"', body: '"Nunito"', gf: 'Lora:wght@500;600;700' },
+    system: { name: 'Font có sẵn trên máy', display: 'system-ui', body: 'system-ui' }
+  };
+  const SIZES = { sm: '92%', md: '', lg: '110%', xl: '125%' };
+  const SIZE_NAMES = { sm: 'Nhỏ', md: 'Vừa', lg: 'Lớn', xl: 'Rất lớn' };
+  let avatarSrc = '';
+  let lastLook = null;
+
+  function applyLook(look) {
+    look = normLook(look);
+    lastLook = look;
+    avatarSrc = look.avatar;
+    const root = document.documentElement;
+    if (look.mode === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', look.mode);
+    const dark = look.mode === 'dark' || (look.mode === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+    THEME_VARS.forEach(v => root.style.removeProperty(v));
+    const t = THEMES[look.theme];
+    if (look.theme !== 'sky') {
+      const set = (k, v) => root.style.setProperty(k, v);
+      set('--sky', t.sky); set('--cta', t.sky); set('--on-cta', t.onCta);
+      if (dark) {
+        set('--sky-deep', t.dark.deep); set('--focus', t.dark.deep); set('--sky-soft', t.dark.soft);
+        set('--sky-wash', t.dark.wash); set('--accent-text', t.dark.text);
+        set('--cta-hover', 'color-mix(in srgb, ' + t.sky + ' 75%, #fff)');
+      } else {
+        set('--sky-deep', t.deep); set('--focus', t.deep); set('--sky-soft', t.soft); set('--sky-wash', t.wash);
+        set('--accent-text', t.text); set('--cta-hover', t.hover); set('--paper', t.paper); set('--rule', t.rule);
+      }
+    }
+
+    const f = FONTS[look.font];
+    if (f && f.display) {
+      root.style.setProperty('--font-display', f.display + ',"Quicksand","Nunito",system-ui,sans-serif');
+      root.style.setProperty('--font-body', f.body + ',"Nunito","Segoe UI",system-ui,sans-serif');
+      root.style.setProperty('--font-mono', f.body + ',"Nunito","Segoe UI",system-ui,sans-serif');
+      if (f.gf && !document.getElementById('font-' + look.font)) {
+        const l = document.createElement('link');
+        l.id = 'font-' + look.font; l.rel = 'stylesheet';
+        l.href = 'https://fonts.googleapis.com/css2?family=' + f.gf + '&display=swap';
+        document.head.appendChild(l);
+      }
+    } else {
+      ['--font-display', '--font-body', '--font-mono'].forEach(v => root.style.removeProperty(v));
+    }
+    root.style.fontSize = SIZES[look.size] || '';
+
+    if (avatarSrc) {
+      const icon = document.querySelector('link[rel="icon"]') || document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'icon' }));
+      icon.href = avatarSrc;
+    }
+  }
+  try {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const again = () => { if (lastLook && lastLook.mode === 'auto') applyLook(lastLook); };
+    if (mq.addEventListener) mq.addEventListener('change', again);
+  } catch (e) {}
+
+  const lookOf = db => normLook(db && db.settings && db.settings.look);
+  const showSection = (db, key) => lookOf(db).show[key] !== false;
+  const catVisible = (db, id) => !lookOf(db).hiddenCats.includes(id);
+  const visibleCategories = db => db.categories.filter(c => catVisible(db, c.id));
 
   function baseLogistics() {
     const r = (from, to, price) => ({ id: uid('r'), from, to, price });
@@ -401,7 +569,7 @@
         lines: lineFrom(byItem('sp-aothun'), [19]).concat(lineFrom(byItem('sp-mockhoa'), [1.8])) }
     ];
 
-    return { version: VERSION, seq: n, jobSeq: 2, settings, categories: baseCategories(), products, customers, factories, logistics: baseLogistics(), printJobs, orders };
+    return { version: VERSION, seq: n, jobSeq: 2, settings, categories: baseCategories(), products, customers, factories, logistics: baseLogistics(), printJobs, jobFees: [], variantPresets: [], orders };
   }
 
   // ==== LƯU TRỮ (thay phần này khi có backend) ====
@@ -420,8 +588,11 @@
         const d = JSON.parse(raw);
         if (d && d.version === VERSION) {
           d.settings = Object.assign(baseSettings(), d.settings); // thêm trường cài đặt mới nếu có
+          d.settings.look = normLook(d.settings.look);
           if (!Array.isArray(d.logistics)) d.logistics = baseLogistics();
           if (!Array.isArray(d.printJobs)) d.printJobs = [];
+          if (!Array.isArray(d.jobFees)) d.jobFees = [];
+          if (!Array.isArray(d.variantPresets)) d.variantPresets = [];
           memory = d;
           return d;
         }
@@ -452,6 +623,12 @@
 
   function reset() { memory = seed(); persist(memory); return memory; }
 
+  // Bỏ đơn in đã xóa khỏi các khoản phụ phí; khoản nào hết đơn in thì xóa luôn
+  function pruneJobFees(d) {
+    const ids = new Set((d.printJobs || []).map(j => j.id));
+    d.jobFees = (d.jobFees || []).map(f => Object.assign({}, f, { jobIds: (f.jobIds || []).filter(id => ids.has(id)) })).filter(f => f.jobIds.length);
+  }
+
   // Bắt đầu trống: giữ danh mục và cài đặt; xóa sản phẩm, đơn, khách, xưởng mẫu
   function clearDemo() {
     return update(d => {
@@ -462,6 +639,7 @@
       d.factories = d.factories.filter(f => !/_demo$/.test(f.contact || ''));
       d.logistics = (d.logistics || []).filter(w => !w.demo);
       d.printJobs = (d.printJobs || []).filter(j => !j.demo);
+      pruneJobFees(d);
     });
   }
 
@@ -634,6 +812,24 @@
     },
     deletePrintJob(db, id) {
       db.printJobs = (db.printJobs || []).filter(j => j.id !== id);
+      pruneJobFees(db);
+    },
+    saveJobFee(db, f) {
+      db.jobFees = db.jobFees || [];
+      const i = db.jobFees.findIndex(x => x.id === f.id);
+      if (i >= 0) db.jobFees[i] = Object.assign({}, db.jobFees[i], f);
+      else db.jobFees.unshift(Object.assign({ createdAt: Date.now() }, f));
+    },
+    deleteJobFee(db, id) {
+      db.jobFees = (db.jobFees || []).filter(f => f.id !== id);
+    },
+    saveVariantPreset(db, p) {
+      db.variantPresets = db.variantPresets || [];
+      const i = db.variantPresets.findIndex(x => x.id === p.id);
+      if (i >= 0) db.variantPresets[i] = p; else db.variantPresets.push(p);
+    },
+    deleteVariantPreset(db, id) {
+      db.variantPresets = (db.variantPresets || []).filter(x => x.id !== id);
     },
     // Quản trị sửa đơn: thông tin khách, file, ghi chú, số lượng và giá từng dòng, cách thanh toán
     editOrder(db, o, data) {
@@ -805,17 +1001,19 @@
     img.onload = () => {
       logoOk = true;
       const icon = document.querySelector('link[rel="icon"]') || document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'icon' }));
-      icon.href = LOGO;
+      icon.href = avatarSrc || LOGO;
       cb();
     };
     img.src = LOGO;
   }
+  const logoSrc = () => avatarSrc || (logoOk ? LOGO : '');
   function brandMark() {
-    return logoOk
-      ? '<img class="brand-logo" src="' + LOGO + '" alt="">'
+    return logoSrc()
+      ? '<img class="brand-logo" src="' + esc(logoSrc()) + '" alt="">'
       : '<svg class="reg" viewBox="0 0 32 32" aria-hidden="true"><circle class="ln" cx="16" cy="16" r="10"/><circle class="dot" cx="16" cy="16" r="4.5"/><path class="ln" d="M16 1v30M1 16h30"/></svg>';
   }
 
+  try { applyLook(load().settings.look); } catch (e) {}
   window.addEventListener('pinya:save-error', () => toast('Không lưu được: bộ nhớ trình duyệt đã đầy hoặc bị chặn. Thử bớt ảnh sản phẩm.'));
 
   window.Pinya = {
@@ -827,7 +1025,9 @@
     load, update, reset, clearDemo, onChange, getSession, setSession,
     getCart, setCart, addToCart, cartLines, getTrack, setTrack, ordersByPhone,
     findOrder, findCustomer, findFactory, findProduct, findCategory, findCustomerByPhone,
-    LOGO, loadLogo, brandMark, hasLogo: () => logoOk,
+    LOGO, loadLogo, brandMark, hasLogo: () => !!logoSrc(), logoSrc,
+    SHOW_KEYS, THEMES, MODES, FONTS, SIZE_NAMES, baseLook, normLook, applyLook, lookOf, showSection, catVisible, visibleCategories,
+    feeShares, feesOfJob, jobFeeTotal, jobFullCost, QTY_PRESETS, qtyPresets, parseTiers, qtyVariants,
     act, ui: { toast, copyText, selectText, lightbox, fileToDataUrl }
   };
 })();

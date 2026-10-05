@@ -17,7 +17,10 @@
     pq: '', pcat: 'all', pstate: 'all',
     confirm: null, draft: { id: null, images: [] },
     prod: null, prodDel: false,
-    cEdit: null, cDel: null, fEdit: null, dataAsk: null
+    cEdit: null, cDel: null, fEdit: null, dataAsk: null,
+    look: null,
+    feEdit: null, feDraft: null, feDel: null,
+    qk: { open: false, unit: 'cái', tiers: '50, 100, 200, 500, 1000', price: '', prefix: '', pname: '' }
   };
   let lastRoute = '';
 
@@ -39,6 +42,7 @@
     if (h === 'xuong') return { view: 'factories' };
     if (h === 'logistics') return { view: 'logistics' };
     if (h === 'cai-dat') return { view: 'settings' };
+    if (h === 'giao-dien') return { view: 'look' };
     return { view: 'overview' };
   }
   function go(hash) {
@@ -95,6 +99,10 @@
       }
     }
     if (r.view === 'product') prepareDraft(db, r.id);
+    if (r.view === 'look') prepareLook(db);
+    if (r.view === 'jobs') prepareFee(db);
+    // Trang Giao diện xem thử ngay bản nháp; các trang khác dùng bản đã lưu
+    P.applyLook(r.view === 'look' && ui.look ? ui.look : db.settings.look);
 
     let body;
     switch (r.view) {
@@ -107,6 +115,7 @@
       case 'logistics': prepareLogistic(db); body = viewLogistics(db); break;
       case 'jobs': body = viewJobs(db); break;
       case 'settings': body = viewSettings(db); break;
+      case 'look': body = viewLook(db); break;
       default: body = viewOverview(db);
     }
     app.innerHTML = `<div class="adm">${side(db, r.view)}<main class="adm-main" id="main">${body}</main></div>`;
@@ -131,10 +140,11 @@
         <a href="#danh-muc"${cur('categories')}>Danh mục</a>
         <a href="#xuong"${cur('factories')}>Xưởng</a>
         <a href="#logistics"${cur('logistics')}>Logistics</a>
+        <a href="#giao-dien"${cur('look')}>Giao diện</a>
         <a href="#cai-dat"${cur('settings')}>Cài đặt</a>
       </nav>
       <div class="side-foot">
-        <div class="side-user"><span class="avatar" aria-hidden="true">${esc((s.adminName || 'A').trim().split(/\s+/).pop().charAt(0).toUpperCase())}</span>
+        <div class="side-user"><span class="avatar" aria-hidden="true">${P.logoSrc() ? `<img src="${esc(P.logoSrc())}" alt="">` : esc((s.adminName || 'A').trim().split(/\s+/).pop().charAt(0).toUpperCase())}</span>
           <div><b>${esc(s.adminName)}</b><small>${esc(s.adminEmail)}</small></div></div>
         <a href="index.html">Xem cửa hàng</a>
         <button class="link-btn" type="button" data-act="logout" style="justify-self:start;padding-left:0">Đăng xuất</button>
@@ -552,6 +562,36 @@
       : `<div class="panel empty"><h3>${db.products.length ? 'Không có sản phẩm phù hợp' : 'Chưa có sản phẩm nào'}</h3><p>${db.products.length ? 'Thử bỏ bớt bộ lọc.' : 'Thêm sản phẩm đầu tiên, rồi thêm các phân loại và giá.'}</p><a class="btn btn-cta btn-sm" href="#sp-moi">Thêm sản phẩm</a></div>`}`;
   }
 
+  // Tạo nhanh phân loại theo số lượng. Mẫu dùng chung; phân loại thêm tay chỉ ở sản phẩm này.
+  function quickBox(db) {
+    const q = ui.qk;
+    const b = 'data-nokeep="1"';
+    const presets = P.qtyPresets(db).map(x => `<span class="qchip"><button type="button" class="chip-btn" data-act="qk-preset" data-id="${esc(x.id)}">${esc(x.name)} <span class="n">${x.tiers.map(n => fmt.num(n)).join(' · ')}</span></button>${x.builtin ? '' : `<button type="button" class="qdel" data-act="qk-del" data-id="${esc(x.id)}" aria-label="Xóa mẫu ${esc(x.name)}">×</button>`}</span>`).join('');
+    return `<div class="qk">
+      <button class="btn btn-ghost btn-sm" type="button" data-act="qk-toggle" aria-expanded="${q.open}">Tạo nhanh theo số lượng</button>
+      ${q.open ? `<div class="qk-body">
+        <p class="hint">Chọn một mẫu số lượng hoặc tự nhập các mức, web tạo sẵn từng phân loại. Giá mỗi phân loại là giá cả gói, khách chọn phân loại rồi chọn số gói.</p>
+        <div class="qchips" role="group" aria-label="Mẫu số lượng">${presets}</div>
+        <div class="form-grid">
+          <div class="field full"><label for="qk-tiers">Các mức số lượng (cách nhau bằng dấu phẩy)</label><input id="qk-tiers" ${b} data-qk="tiers" value="${esc(q.tiers)}" autocomplete="off" placeholder="50, 100, 200, 500, 1000"></div>
+          <div class="field"><label for="qk-unit">Đơn vị</label><input id="qk-unit" ${b} data-qk="unit" value="${esc(q.unit)}" autocomplete="off" placeholder="cái, tờ, bộ…"></div>
+          <div class="field"><label for="qk-price">Đơn giá mỗi cái (không bắt buộc)</label><div class="unit"><input id="qk-price" ${b} data-qk="price" value="${esc(q.price)}" inputmode="numeric" autocomplete="off" placeholder="Để trống nếu nhập giá sau"><span>₫</span></div></div>
+          <div class="field full"><label for="qk-prefix">Ghi thêm vào tên (không bắt buộc)</label><input id="qk-prefix" ${b} data-qk="prefix" value="${esc(q.prefix)}" autocomplete="off" placeholder="VD: In 2 mặt"></div>
+        </div>
+        <p class="hint" id="qk-out" aria-live="polite">${qkText()}</p>
+        <p class="err" id="err-qk"></p>
+        <div class="actions" style="margin-top:8px"><button class="btn btn-cta btn-sm" type="button" data-act="qk-gen">Tạo phân loại</button>
+          <input class="qk-name" id="qk-pname" ${b} data-qk="pname" value="${esc(q.pname)}" autocomplete="off" placeholder="Tên mẫu mới" aria-label="Tên mẫu mới">
+          <button class="btn btn-quiet btn-sm" type="button" data-act="qk-save">Lưu các mức này thành mẫu</button></div>
+      </div>` : ''}</div>`;
+  }
+  function qkText() {
+    const q = ui.qk;
+    const t = P.parseTiers(q.tiers);
+    if (!t.length) return 'Nhập ít nhất một mức số lượng.';
+    return 'Sẽ tạo ' + t.length + ' phân loại: ' + P.qtyVariants(t, q.unit, P.parseNum(q.price), q.prefix).map(v => v.name + (v.price !== '' ? ' (' + fmt.vnd(v.price) + ')' : '')).join(', ') + '.';
+  }
+
   function newVariant() { return { id: P.uid('v'), name: '', price: '', minQty: 1 }; }
 
   function prepareDraft(db, id) {
@@ -598,7 +638,8 @@
             </div>
           </section>
           <section class="panel"><div class="panel-h"><h2>Phân loại và giá</h2><span class="muted">${p.variants.length} phân loại</span></div>
-            <p class="hint" style="margin-bottom:12px">Mỗi phân loại có giá riêng, ví dụ theo kích thước, chất liệu, số mặt in. Khách chọn phân loại rồi mới đặt hàng.</p>
+            <p class="hint" style="margin-bottom:12px">Mỗi phân loại có giá riêng, ví dụ theo kích thước, chất liệu, số mặt in. Phân loại thêm tay ở đây chỉ thuộc sản phẩm này, không lưu cho sản phẩm khác.</p>
+            ${quickBox(db)}
             <div class="vrows">${vrows}</div>
             <p class="err" id="err-pf-variants" style="margin-top:8px"></p>
             <div class="actions" style="margin-top:12px"><button class="btn btn-quiet btn-sm" type="button" data-act="v-add">+ Thêm phân loại</button></div>
@@ -845,7 +886,7 @@
         <td data-label="Tỷ giá" class="r">${fmt.num(j.rate)}</td>
         <td data-label="Quy đổi VNĐ" class="r"><b>${fmt.vnd(c.totalVnd)}</b><span class="sub">¥${fmt.num(c.totalCny)}</span></td>
         <td data-label="Cân nặng" class="r"><div class="unit kg-cell"><input class="jkg" data-id="${esc(j.id)}" data-nokeep="1" inputmode="decimal" autocomplete="off" value="${+j.kg > 0 ? esc(fmt.num(j.kg)) : ''}" placeholder="Chưa về" aria-label="Cân nặng ${esc(j.code || '')}"><span>kg</span></div></td>
-        <td data-label="Kho trung chuyển">${w ? esc(w.name) : '<span class="muted">Chưa chọn</span>'}${sq && sq.ok ? `<span class="sub">Ship ${fmt.vnd(sq.cost)}</span>` : ''}</td>
+        <td data-label="Kho trung chuyển">${w ? esc(w.name) : '<span class="muted">Chưa chọn</span>'}${sq && sq.ok ? `<span class="sub">Ship ${fmt.vnd(sq.cost)}</span>` : ''}${P.jobFeeTotal(db, j.id) ? `<span class="sub">Phụ phí chia ${fmt.vnd(P.jobFeeTotal(db, j.id))}</span>` : ''}</td>
         <td data-label="Trạng thái"><span class="pill ${st.cls}">${esc(st.label)}</span></td>
         <td class="r">${ui.jDel === j.id
           ? `<button class="btn btn-danger btn-xs" type="button" data-act="j-del-yes" data-id="${esc(j.id)}">Xóa</button> <button class="link-btn" type="button" data-act="j-del-no">Thôi</button>`
@@ -879,7 +920,84 @@
       ${list.length ? `<div class="tbl-wrap tbl-scroll"><table class="tbl jobs">
         <thead><tr><th>Đơn in</th><th>Đơn khách</th><th>Sản phẩm</th><th class="r">Tỷ giá</th><th class="r">Quy đổi VNĐ</th><th class="r">Cân nặng</th><th>Kho trung chuyển</th><th>Trạng thái</th><th><span class="sr-only">Thao tác</span></th></tr></thead>
         <tbody>${rows}</tbody></table></div>`
-      : `<div class="panel empty"><h3>${jobs.length ? 'Không có đơn in phù hợp' : 'Chưa có đơn in nào'}</h3><p>${jobs.length ? 'Thử từ khóa khác.' : 'Chọn các đơn khách đã thanh toán ở trên để tạo đơn in.'}</p></div>`}`;
+      : `<div class="panel empty"><h3>${jobs.length ? 'Không có đơn in phù hợp' : 'Chưa có đơn in nào'}</h3><p>${jobs.length ? 'Thử từ khóa khác.' : 'Chọn các đơn khách đã thanh toán ở trên để tạo đơn in.'}</p></div>`}
+      ${feePanel(db)}`;
+  }
+
+  // ==== Phụ phí đơn in: chia một khoản chi chung theo cân nặng từng đơn in ====
+  function prepareFee(db) {
+    if (!ui.feEdit) { ui.feDraft = null; return; }
+    if (ui.feDraft && ui.feDraft._key === ui.feEdit) return;
+    if (ui.feEdit === 'new') ui.feDraft = { id: P.uid('jf'), name: '', amount: '', jobIds: [], note: '' };
+    else {
+      const f = (db.jobFees || []).find(x => x.id === ui.feEdit);
+      ui.feDraft = f ? JSON.parse(JSON.stringify(f)) : null;
+    }
+    if (ui.feDraft) ui.feDraft._key = ui.feEdit;
+  }
+
+  function shareRows(db, f, withTotal) {
+    const sh = P.feeShares(f, db);
+    const rows = sh.rows.map(r => {
+      const j = (db.printJobs || []).find(x => x.id === r.jobId) || {};
+      return `<tr><td><b>${esc(j.code || '')}</b></td><td class="r">${r.kg ? fmt.num(r.kg) + ' kg' : '<span class="muted">Chưa có cân</span>'}</td><td class="r">${sh.ok ? fmt.num(Math.round(r.pct * 10) / 10) + '%' : '—'}</td><td class="r"><b>${sh.ok ? fmt.vnd(r.amount) : '—'}</b></td></tr>`;
+    }).join('');
+    const foot = withTotal ? `<tr class="tot"><td>Tổng</td><td class="r">${fmt.num(Math.round(sh.totalKg * 100) / 100)} kg</td><td class="r">${sh.ok ? '100%' : ''}</td><td class="r"><b>${fmt.vnd(sh.amount)}</b></td></tr>` : '';
+    return `<table class="tbl feeshare"><thead><tr><th>Đơn in</th><th class="r">Cân nặng</th><th class="r">Tỷ lệ</th><th class="r">Phụ phí chịu</th></tr></thead><tbody>${rows}${foot}</tbody></table>`;
+  }
+
+  function feeForm(db) {
+    const f = ui.feDraft;
+    if (!f) return '';
+    const b = 'data-nokeep="1"';
+    const picked = new Set(f.jobIds);
+    const jobs = (db.printJobs || []).slice().sort((a, c) => (picked.has(c.id) - picked.has(a.id)) || c.createdAt - a.createdAt);
+    const jobRows = jobs.map(j => {
+      const kg = +j.kg > 0;
+      const dis = !kg && !picked.has(j.id);
+      return `<label class="jo${picked.has(j.id) ? ' on' : ''}${dis ? ' off' : ''}">
+        <input type="checkbox" class="fe-pick" ${b} value="${esc(j.id)}"${picked.has(j.id) ? ' checked' : ''}${dis ? ' disabled' : ''}>
+        <span class="jo-main"><b>${esc(j.code || '')}</b>${j.mvd ? ' · ' + esc(j.mvd) : ''}<small>${(j.lines || []).map(l => esc(l.productName) + ' × ' + fmt.num(l.qty)).join(' · ')}</small></span>
+        <span class="jo-tags">${kg ? '<b>' + fmt.num(j.kg) + ' kg</b>' : '<span class="muted">Chưa có cân nặng</span>'}</span></label>`;
+    }).join('');
+    return `<form id="fe-form" class="panel lead" novalidate style="margin-bottom:16px">
+      <div class="panel-h"><h2>${ui.feEdit === 'new' ? 'Thêm phụ phí' : 'Sửa phụ phí'}</h2></div>
+      <div class="form-grid">
+        <div class="field"><label for="fe-name">Tên khoản phí <span class="req" aria-hidden="true">*</span></label><input id="fe-name" ${b} data-fe="name" value="${esc(f.name)}" autocomplete="off" placeholder="VD: Ship Lạng Sơn → Hà Nội" aria-describedby="err-fe-name"><p class="err" id="err-fe-name"></p></div>
+        <div class="field"><label for="fe-amount">Tổng tiền cả lô <span class="req" aria-hidden="true">*</span></label><div class="unit"><input id="fe-amount" ${b} data-fe="amount" value="${f.amount === '' ? '' : esc(fmt.num(f.amount))}" inputmode="numeric" autocomplete="off" placeholder="0" aria-describedby="err-fe-amount"><span>₫</span></div><p class="err" id="err-fe-amount"></p></div>
+        <div class="field full"><label for="fe-note">Ghi chú</label><input id="fe-note" ${b} data-fe="note" value="${esc(f.note || '')}" autocomplete="off" placeholder="VD: Gửi chung 1 xe, đơn vị vận chuyển ABC"></div>
+      </div>
+      <h3 class="sec-title">Các đơn in đi chung lô này</h3>
+      ${jobs.length ? `<div class="jo-list">${jobRows}</div><p class="hint" style="margin-top:6px">Đơn in chưa có cân nặng thì chưa chọn được. Điền cân ở bảng Đơn in khi hàng về kho.</p>` : '<p class="muted">Chưa có đơn in nào.</p>'}
+      <p class="err" id="err-fe-jobs"></p>
+      <h3 class="sec-title">Chia theo cân nặng</h3>
+      <div id="fe-out">${feeOut(db, f)}</div>
+      <div class="actions"><button class="btn btn-cta btn-sm" type="submit">${ui.feEdit === 'new' ? 'Lưu phụ phí' : 'Lưu'}</button><button class="link-btn" type="button" data-act="fe-cancel">Thôi</button></div>
+    </form>`;
+  }
+  function feeOut(db, f) {
+    return f.jobIds.length ? shareRows(db, f, true) + (+f.amount > 0 ? '' : '<p class="hint" style="margin-top:6px">Nhập tổng tiền để thấy số chia.</p>') : '<p class="muted">Chọn các đơn in ở trên để xem số tiền mỗi đơn chịu.</p>';
+  }
+  function updateFeeOut() {
+    const out = document.getElementById('fe-out');
+    if (out && ui.feDraft) out.innerHTML = feeOut(P.load(), ui.feDraft);
+  }
+
+  function feePanel(db) {
+    const fees = db.jobFees || [];
+    const total = sum(fees, f => +f.amount);
+    const cards = fees.map(f => `<div class="feecard">
+        <div class="feecard-h"><div><b>${esc(f.name)}</b><span class="sub">${fmt.date(f.createdAt || Date.now())}${f.note ? ' · ' + esc(f.note) : ''}</span></div>
+          <div class="r"><b>${fmt.vnd(f.amount)}</b>
+            <div>${ui.feDel === f.id
+              ? `<button class="btn btn-danger btn-xs" type="button" data-act="fe-del-yes" data-id="${esc(f.id)}">Xóa</button> <button class="link-btn" type="button" data-act="fe-del-no">Thôi</button>`
+              : `<button class="btn btn-quiet btn-xs" type="button" data-act="fe-edit" data-id="${esc(f.id)}">Sửa</button> <button class="link-btn" type="button" data-act="fe-del-ask" data-id="${esc(f.id)}">Xóa</button>`}</div></div></div>
+        <div class="tbl-wrap tbl-scroll">${shareRows(db, f, true)}</div></div>`).join('');
+    return `<section class="panel" style="margin-top:20px"><div class="panel-h"><h2>Phụ phí chia theo cân nặng</h2><span class="muted">${fees.length ? fees.length + ' khoản · ' + fmt.vnd(total) : 'Ship nội địa, phí chung của cả lô'}</span></div>
+      <p class="muted" style="margin-bottom:12px">Gửi 2-3 đơn in chung một công ty vận chuyển? Khi hàng về Việt Nam còn tiền ship từ kho về nhà, nhập một khoản rồi chọn các đơn in đi chung. Web chia theo tỷ lệ cân nặng từng đơn in.</p>
+      ${ui.feEdit ? feeForm(db) : '<div class="actions" style="margin-top:0;margin-bottom:12px"><button class="btn btn-cta btn-sm" type="button" data-act="fe-new">Thêm phụ phí</button></div>'}
+      ${cards || (ui.feEdit ? '' : '<p class="muted">Chưa có khoản phụ phí nào.</p>')}
+    </section>`;
   }
 
   // Khung "Đơn in" trong trang chi tiết đơn khách
@@ -890,7 +1008,7 @@
       const mine = (j.lines || []).filter(l => l.orderId === o.id);
       return `<section class="panel"><div class="panel-h"><h2>Đơn in ${esc(j.code || '')}</h2><span class="pill ${st.cls}">${esc(st.label)}</span></div>
         <table class="items"><tbody>${mine.map(l => { const c = P.lineCost(l, j.rate); return `<tr><td><span class="it-name">${esc(l.productName)}</span><small>${fmt.num(l.qty)} sp × ¥${fmt.num(l.cny)}</small></td><td class="r"><b>${fmt.vnd(c.totalVnd)}</b></td></tr>`; }).join('')}</tbody></table>
-        <dl class="kv" style="margin-top:10px"><dt>Mã vận đơn</dt><dd>${j.mvd ? esc(j.mvd) : '<span class="muted">Chưa có</span>'}</dd>${+j.kg > 0 ? `<dt>Cân nặng lô</dt><dd>${fmt.num(j.kg)} kg</dd>` : ''}</dl>
+        <dl class="kv" style="margin-top:10px"><dt>Mã vận đơn</dt><dd>${j.mvd ? esc(j.mvd) : '<span class="muted">Chưa có</span>'}</dd>${+j.kg > 0 ? `<dt>Cân nặng lô</dt><dd>${fmt.num(j.kg)} kg</dd>` : ''}${P.feesOfJob(db, j.id).map(x => `<dt>${esc(x.fee.name)}</dt><dd>${fmt.vnd(x.amount)} <span class="muted">(${fmt.num(Math.round(x.pct * 10) / 10)}% cân)</span></dd>`).join('')}</dl>
         <div class="actions"><button class="btn btn-quiet btn-sm" type="button" data-act="j-edit-go" data-id="${esc(j.id)}">Mở đơn in</button></div></section>`;
     }
     if (!P.printable(db, o)) return '';
@@ -983,6 +1101,49 @@
         <div id="lg-out" style="margin-top:12px" aria-live="polite">${quoteRows(db)}</div>
       </section>
       ${ws.length ? `<div class="fgrid">${cards}</div>` : '<div class="panel empty"><h3>Chưa có kho nào</h3><p>Thêm kho trung chuyển và bảng giá cân để tính phí ship cho từng đơn.</p></div>'}`;
+  }
+
+  // ==== Giao diện: avatar, màu, font, cỡ chữ, mục hiển thị trên web ====
+  function prepareLook(db) {
+    if (!ui.look) ui.look = P.normLook(db.settings.look);
+  }
+
+  function viewLook(db) {
+    const l = ui.look;
+    const initial = esc((db.settings.adminName || 'P').trim().charAt(0).toUpperCase());
+    const avatar = l.avatar ? `<img src="${esc(l.avatar)}" alt="">` : initial;
+    const swatches = Object.keys(P.THEMES).map(k => `<button class="swatch" type="button" data-act="lk-theme" data-v="${k}" aria-pressed="${l.theme === k}" style="--dot:${P.THEMES[k].dot}"><i></i>${esc(P.THEMES[k].name)}</button>`).join('');
+    const seg = (act, items, cur) => `<div class="seg" role="group">${Object.keys(items).map(k => `<button type="button" data-act="${act}" data-v="${k}" aria-pressed="${cur === k}">${esc(items[k])}</button>`).join('')}</div>`;
+    const showBox = (k, label) => `<label class="check"><input type="checkbox" data-nokeep="1" data-lshow="${k}"${l.show[k] !== false ? ' checked' : ''}>${esc(label)}</label>`;
+    const catBox = c => `<label class="check"><input type="checkbox" data-nokeep="1" data-lcat="${esc(c.id)}"${l.hiddenCats.includes(c.id) ? '' : ' checked'}>${esc(c.name)}</label>`;
+    const fonts = Object.keys(P.FONTS).map(k => `<option value="${k}"${l.font === k ? ' selected' : ''}>${esc(P.FONTS[k].name)}</option>`).join('');
+    return `<div class="page-head"><div><h1>Giao diện</h1><p>Chỉnh màu, font, cỡ chữ và các mục hiện trên web. Trang này xem thử ngay, bấm Lưu mới áp dụng cho khách.</p></div>
+        <a class="btn btn-ghost btn-sm" href="index.html" target="_blank" rel="noopener">Xem cửa hàng</a></div>
+      <form id="look-form" class="panel" novalidate>
+        <h2 class="sec-title">Ảnh đại diện</h2>
+        <div class="look-avatar"><span class="avatar big" aria-hidden="true">${avatar}</span>
+          <div><p class="hint" style="margin-bottom:8px">Hiện làm logo ở thanh ngang, chân trang, trang chủ, biểu tượng thẻ trình duyệt và góc trang quản trị. Nên dùng ảnh vuông.</p>
+            <div class="actions" style="margin-top:0">
+              <input id="look-avatar" type="file" accept="image/*" class="sr-only file-in" data-nokeep="1">
+              <label class="btn btn-quiet btn-sm" for="look-avatar">${l.avatar ? 'Đổi ảnh' : 'Chọn ảnh'}</label>
+              ${l.avatar ? '<button class="link-btn" type="button" data-act="lk-avatar-rm">Bỏ ảnh</button>' : ''}</div></div></div>
+        <h2 class="sec-title">Màu chủ đạo</h2>
+        <div class="swatches" role="group" aria-label="Màu chủ đạo">${swatches}</div>
+        <h2 class="sec-title">Sáng hay tối</h2>
+        ${seg('lk-mode', P.MODES, l.mode)}
+        <h2 class="sec-title">Font chữ</h2>
+        <div class="field" style="max-width:420px"><label class="sr-only" for="look-font">Font chữ</label><select id="look-font" data-nokeep="1">${fonts}</select></div>
+        <p class="look-sample">Pinya Printing · In ấn tại xưởng, giao tận tay. Bảng chữ: ÀÁẠẢÃ Ơ Ư Đ 0123456789</p>
+        <h2 class="sec-title">Cỡ chữ</h2>
+        ${seg('lk-size', P.SIZE_NAMES, l.size)}
+        <h2 class="sec-title">Mục hiển thị trên web</h2>
+        ${P.SHOW_KEYS.map(([group, items]) => `<fieldset class="look-group"><legend>${esc(group)}</legend><div class="checks">${items.map(([k, label]) => showBox(k, label)).join('')}</div></fieldset>`).join('')}
+        <fieldset class="look-group"><legend>Danh mục hiện trên web</legend>
+          ${db.categories.length ? `<div class="checks">${db.categories.map(catBox).join('')}</div><p class="hint" style="margin-top:6px">Bỏ tích thì danh mục ẩn khỏi thanh ngang, trang chủ, chân trang và khách không mở được trang danh mục đó.</p>` : '<p class="muted">Chưa có danh mục.</p>'}</fieldset>
+        <div class="actions"><button class="btn btn-cta" type="submit">Lưu giao diện</button>
+          <button class="link-btn" type="button" data-act="lk-reset">Về mặc định</button>
+          <button class="link-btn" type="button" data-act="lk-undo">Hoàn tác thay đổi</button></div>
+      </form>`;
   }
 
   // ==== Cài đặt ====
@@ -1113,6 +1274,48 @@
       case 'j-del-ask': ui.jDel = t.dataset.id; render(); return;
       case 'j-del-no': ui.jDel = null; render(); return;
       case 'j-del-yes': P.update(d => P.act.deletePrintJob(d, t.dataset.id)); ui.jDel = null; done('Đã xóa đơn in.'); return;
+      // Phụ phí đơn in
+      case 'fe-new': ui.feEdit = 'new'; ui.feDraft = null; ui.feDel = null; render(); { const n = document.getElementById('fe-name'); if (n) n.focus(); } return;
+      case 'fe-edit': ui.feEdit = t.dataset.id; ui.feDraft = null; ui.feDel = null; render(); { const n = document.getElementById('fe-form'); if (n) n.scrollIntoView({ block: 'center' }); } return;
+      case 'fe-cancel': ui.feEdit = null; ui.feDraft = null; render(); return;
+      case 'fe-del-ask': ui.feDel = t.dataset.id; render(); return;
+      case 'fe-del-no': ui.feDel = null; render(); return;
+      case 'fe-del-yes': P.update(d => P.act.deleteJobFee(d, t.dataset.id)); ui.feDel = null; done('Đã xóa khoản phụ phí.'); return;
+      // Giao diện
+      case 'lk-theme': ui.look.theme = t.dataset.v; render(); return;
+      case 'lk-mode': ui.look.mode = t.dataset.v; render(); return;
+      case 'lk-size': ui.look.size = t.dataset.v; render(); return;
+      case 'lk-avatar-rm': ui.look.avatar = ''; render(); return;
+      case 'lk-reset': { const keepAvatar = ui.look.avatar; ui.look = Object.assign(P.baseLook(), { avatar: keepAvatar }); render(); return; }
+      case 'lk-undo': ui.look = null; render(); P.ui.toast('Đã trả về bản đang lưu.'); return;
+      // Phân loại nhanh theo số lượng
+      case 'qk-toggle': ui.qk.open = !ui.qk.open; render(); return;
+      case 'qk-preset': {
+        const x = P.qtyPresets(db).find(y => y.id === t.dataset.id);
+        if (x) { ui.qk.tiers = x.tiers.join(', '); if (x.unit) ui.qk.unit = x.unit; }
+        render(); return;
+      }
+      case 'qk-del': P.update(d => P.act.deleteVariantPreset(d, t.dataset.id)); render(); P.ui.toast('Đã xóa mẫu.'); return;
+      case 'qk-save': {
+        const tiers = P.parseTiers(ui.qk.tiers);
+        const name = ui.qk.pname.trim();
+        if (!tiers.length) { setErr('qk', 'Nhập ít nhất một mức số lượng.'); return; }
+        if (!name) { setErr('qk', 'Nhập tên cho mẫu mới.'); const n = document.getElementById('qk-pname'); if (n) n.focus(); return; }
+        P.update(d => P.act.saveVariantPreset(d, { id: P.uid('q'), name, unit: ui.qk.unit.trim(), tiers }));
+        ui.qk.pname = ''; render(); P.ui.toast('Đã lưu mẫu “' + name + '”. Dùng lại cho sản phẩm khác ở mục này.'); return;
+      }
+      case 'qk-gen': {
+        const tiers = P.parseTiers(ui.qk.tiers);
+        if (!tiers.length) { setErr('qk', 'Nhập ít nhất một mức số lượng.'); return; }
+        const made = P.qtyVariants(tiers, ui.qk.unit, P.parseNum(ui.qk.price), ui.qk.prefix);
+        const keep = ui.prod.variants.filter(v => String(v.name).trim() || v.price !== '');
+        const have = new Set(keep.map(v => String(v.name).trim().toLowerCase()));
+        const add = made.filter(v => !have.has(v.name.toLowerCase()));
+        ui.prod.variants = keep.concat(add);
+        render();
+        P.ui.toast(add.length ? 'Đã tạo ' + add.length + ' phân loại.' + (add.length < made.length ? ' Bỏ ' + (made.length - add.length) + ' mức đã có.' : '') + (ui.qk.price.trim() ? '' : ' Điền giá cho từng phân loại nhé.') : 'Các phân loại này đã có trong sản phẩm.');
+        return;
+      }
       // Thao tác hàng loạt
       case 'bulk-ask': ui.bulkTo = document.getElementById('bulk-status').value; ui.bulkAsk = true; render(); return;
       case 'bulk-no': ui.bulkAsk = false; render(); return;
@@ -1281,6 +1484,13 @@
     const id = el.id;
     if (id === 'o-search' || id === 'p-search' || id === 'j-search') { if (!e.isComposing) onSearch(el); return; }
     if (el.dataset.jl || el.dataset.jf) { bindJob(el); updateJobOut(); setErr('j-lines', ''); return; }
+    if (el.dataset.fe && ui.feDraft) {
+      const k = el.dataset.fe;
+      ui.feDraft[k] = k === 'amount' ? (el.value.trim() === '' ? '' : (P.parseNum(el.value) >= 0 ? P.parseNum(el.value) : '')) : el.value;
+      if (k === 'amount') updateFeeOut();
+      setErr('fe-' + k, ''); return;
+    }
+    if (el.dataset.qk) { ui.qk[el.dataset.qk] = el.value; const out = document.getElementById('qk-out'); if (out) out.textContent = qkText(); setErr('qk', ''); return; }
     if (id === 'lg-kg') { ui.lKg = el.value; const out = document.getElementById('lg-out'); if (out) out.innerHTML = quoteRows(P.load()); return; }
     if (id === 'sh-kg') { updateShipQuote(); return; }
     if (el.dataset.lbind) { bindLogistic(el); if (id === 'lf-name') setErr('lf-name', ''); if (el.dataset.r) setErr('lf-rates', ''); return; }
@@ -1313,6 +1523,35 @@
       else ui.jDraft.lines = ui.jDraft.lines.filter(l => l.orderId !== o.id);
       setErr('j-lines', '');
       render(); return;
+    }
+    if (el.classList.contains('fe-pick') && ui.feDraft) {
+      const set = new Set(ui.feDraft.jobIds);
+      if (el.checked) set.add(el.value); else set.delete(el.value);
+      ui.feDraft.jobIds = [...set];
+      setErr('fe-jobs', '');
+      render(); return;
+    }
+    if (el.dataset.fe && ui.feDraft) {
+      if (el.dataset.fe === 'amount' && el.value.trim() !== '') { const n = P.parseNum(el.value); if (n >= 0) el.value = fmt.num(n); }
+      return;
+    }
+    if (el.dataset.qk) {
+      if (el.dataset.qk === 'price' && el.value.trim() !== '') { const n = P.parseNum(el.value); if (n >= 0) { el.value = fmt.num(n); ui.qk.price = fmt.num(n); } }
+      return;
+    }
+    // Giao diện
+    if (ui.look && el.dataset.lshow) { ui.look.show[el.dataset.lshow] = el.checked; P.applyLook(ui.look); return; }
+    if (ui.look && el.dataset.lcat) {
+      const set = new Set(ui.look.hiddenCats);
+      if (el.checked) set.delete(el.dataset.lcat); else set.add(el.dataset.lcat);
+      ui.look.hiddenCats = [...set]; return;
+    }
+    if (id === 'look-font' && ui.look) { ui.look.font = el.value; render(); return; }
+    if (id === 'look-avatar' && ui.look) {
+      const file = (el.files || [])[0]; el.value = '';
+      if (!file) return;
+      P.ui.fileToDataUrl(file, 256, 0.85).then(url => { ui.look.avatar = url; render(); }, () => P.ui.toast('File này không phải ảnh.'));
+      return;
     }
     if (el.classList.contains('np-pick')) {
       if (el.checked) ui.npPicked.add(el.value); else ui.npPicked.delete(el.value);
@@ -1393,6 +1632,31 @@
       ui.jEdit = null; ui.jDraft = null;
       const n = new Set(clean.lines.map(l => l.orderId)).size;
       done((isNew ? 'Đã tạo đơn in ' : 'Đã lưu đơn in ') + (code || '') + ' cho ' + n + ' đơn khách.');
+      return;
+    }
+
+    if (f.id === 'look-form') {
+      P.update(d => { d.settings.look = P.normLook(ui.look); });
+      ui.look = null;
+      done('Đã lưu giao diện. Cửa hàng đã cập nhật.');
+      return;
+    }
+
+    if (f.id === 'fe-form') {
+      const x = ui.feDraft;
+      if (!x) return;
+      setErr('fe-name', ''); setErr('fe-amount', ''); setErr('fe-jobs', '');
+      if (!String(x.name).trim()) { setErr('fe-name', 'Nhập tên khoản phí.'); document.getElementById('fe-name').focus(); return; }
+      if (!(+x.amount > 0)) { setErr('fe-amount', 'Nhập tổng tiền lớn hơn 0.'); document.getElementById('fe-amount').focus(); return; }
+      if (!x.jobIds.length) { setErr('fe-jobs', 'Chọn ít nhất một đơn in.'); return; }
+      const db = P.load();
+      const noKg = x.jobIds.map(id => (db.printJobs || []).find(j => j.id === id)).filter(j => j && !(+j.kg > 0));
+      if (noKg.length) { setErr('fe-jobs', noKg.map(j => j.code).join(', ') + ' chưa có cân nặng nên chưa chia được.'); return; }
+      const clean = { id: x.id, name: String(x.name).trim(), amount: Math.round(+x.amount), jobIds: x.jobIds.slice(), note: String(x.note || '').trim() };
+      const isNew = ui.feEdit === 'new';
+      P.update(d => P.act.saveJobFee(d, clean));
+      ui.feEdit = null; ui.feDraft = null;
+      done((isNew ? 'Đã thêm phụ phí ' : 'Đã lưu phụ phí ') + clean.name + '.');
       return;
     }
 
@@ -1573,6 +1837,7 @@
     ui.confirm = null; ui.fEdit = null; ui.cEdit = null; ui.cDel = null; ui.dataAsk = null;
     ui.lEdit = null; ui.lDraft = null; ui.lDel = null; ui.bulkAsk = false;
     ui.jEdit = null; ui.jDraft = null; ui.jDel = null; ui.oEdit = false;
+    ui.feEdit = null; ui.feDraft = null; ui.feDel = null; ui.look = null;
     if (route().view !== 'product') ui.prod = null;
     render();
     window.scrollTo(0, 0);
