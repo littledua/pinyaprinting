@@ -146,9 +146,7 @@
         <a href="#tong-quan"${cur('overview')}>Tổng quan</a>
         <a href="#don-hang"${cur('orders', 'order')}>Đơn hàng${todo ? ` <span class="count" aria-label="${todo} đơn cần xử lý">${todo}</span>` : ''}</a>
         <a href="#don-in"${cur('jobs')}>Đơn in</a>
-        <a href="#san-pham"${cur('products', 'product')}>Sản phẩm</a>
-        <a href="#thu-vien"${cur('library')}>Phân loại</a>
-        <a href="#danh-muc"${cur('categories')}>Danh mục</a>
+        <a href="#san-pham"${cur('products', 'product', 'library', 'categories')}>Quản lý sản phẩm</a>
         <a href="#xuong"${cur('factories')}>Xưởng</a>
         <a href="#logistics"${cur('logistics')}>Logistics</a>
         <a href="#giao-dien"${cur('look')}>Giao diện</a>
@@ -533,6 +531,12 @@
       </div>`;
   }
 
+  // ==== Quản lý sản phẩm: Sản phẩm · Phân loại · Danh mục ====
+  function manageTabs(view) {
+    const tabs = [['products', '#san-pham', 'Sản phẩm'], ['library', '#thu-vien', 'Phân loại'], ['categories', '#danh-muc', 'Danh mục']];
+    return `<nav class="subtabs" aria-label="Quản lý sản phẩm">${tabs.map(([v, href, label]) => `<a href="${href}"${v === view ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>`;
+  }
+
   // ==== Sản phẩm ====
   function viewProducts(db) {
     let list = db.products.slice();
@@ -555,7 +559,7 @@
       </tr>`;
     }).join('');
 
-    return `<div class="page-head"><div><h1>Sản phẩm</h1><p>${db.products.length} sản phẩm · ${db.products.filter(p => p.active).length} đang bán</p></div>
+    return `${manageTabs('products')}<div class="page-head"><div><h1>Sản phẩm</h1><p>${db.products.length} sản phẩm · ${db.products.filter(p => p.active).length} đang bán</p></div>
         <a class="btn btn-cta btn-sm" href="#sp-moi">Thêm sản phẩm</a></div>
       ${demo ? `<p class="note-box" style="margin-bottom:16px">Đang có ${demo} sản phẩm mẫu để xem thử, giá chỉ là ví dụ. Sửa thành sản phẩm thật, hoặc xóa hết ở <a href="#cai-dat">Cài đặt</a>.</p>` : ''}
       <div class="toolbar">
@@ -795,7 +799,7 @@
         ${del}
       </div>`;
     }).join('');
-    return `<div class="page-head"><div><h1>Danh mục</h1><p>Hiện trên thanh ngang của cửa hàng, cạnh Giới thiệu và Liên hệ, theo thứ tự dưới đây.</p></div>
+    return `${manageTabs('categories')}<div class="page-head"><div><h1>Danh mục</h1><p>Hiện trên thanh ngang của cửa hàng, cạnh Giới thiệu và Liên hệ, theo thứ tự dưới đây.</p></div>
         ${ui.cEdit ? '' : '<button class="btn btn-cta btn-sm" type="button" data-act="c-new">Thêm danh mục</button>'}</div>
       ${ui.cEdit ? categoryForm(db) : ''}
       ${db.categories.length ? `<div class="clist">${rows}</div>` : '<div class="panel empty"><h3>Chưa có danh mục</h3><p>Thêm danh mục để bắt đầu xếp sản phẩm.</p></div>'}
@@ -1260,7 +1264,7 @@
         <form class="g-addval" data-libform="${esc(g.id)}" novalidate><input data-nokeep="1" id="lib-val-${esc(g.id)}" placeholder="Thêm lựa chọn cho ${esc(g.name)}…" autocomplete="off" aria-label="Thêm lựa chọn cho ${esc(g.name)}"><button class="btn btn-quiet btn-sm" type="submit">Thêm</button></form>
       </section>`;
     }).join('');
-    return `<div class="page-head"><div><h1>Phân loại</h1><p>Nhóm dùng chung như Chất liệu, Màu, Số lượng. Khi tạo sản phẩm bạn chọn nhóm từ đây. Gõ nhiều lựa chọn cách nhau bằng dấu phẩy để thêm một lần.</p></div></div>
+    return `${manageTabs('library')}<div class="page-head"><div><h1>Phân loại</h1><p>Nhóm dùng chung như Chất liệu, Màu, Số lượng. Khi tạo sản phẩm bạn chọn nhóm từ đây. Gõ nhiều lựa chọn cách nhau bằng dấu phẩy để thêm một lần.</p></div></div>
       <form id="lib-new-form" class="lib-new" novalidate><label class="sr-only" for="lib-new-name">Tên nhóm phân loại mới</label>
         <input id="lib-new-name" data-nokeep="1" placeholder="Tên nhóm phân loại mới, VD: Màu, Size, Chất liệu…" autocomplete="off"><button class="btn btn-cta btn-sm" type="submit">+ Thêm nhóm</button></form>
       <p class="err" id="err-lib-new-name"></p>

@@ -464,3 +464,9 @@ a.soc:hover{text-decoration:underline}
 .mx input{width:18px;height:18px;accent-color:var(--sky-deep)}
 .bulk-fill{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
 .bulk-fill input{width:130px;font:inherit;padding:8px 12px;border:1.5px solid var(--rule);border-radius:999px;background:var(--sheet);color:var(--ink)}
+
+/* Thanh tab Quản lý sản phẩm */
+.subtabs{display:inline-flex;flex-wrap:wrap;gap:4px;padding:5px;background:var(--sheet);border:1px solid var(--rule);border-radius:999px;margin-bottom:20px;max-width:100%}
+.subtabs a{padding:9px 20px;border-radius:999px;text-decoration:none;color:var(--ink-soft);font-weight:700;font-size:.95rem;white-space:nowrap}
+.subtabs a:hover{color:var(--ink);background:var(--sky-wash)}
+.subtabs a[aria-current="page"]{background:var(--sky);color:var(--on-cta)}
