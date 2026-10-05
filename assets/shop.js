@@ -6,8 +6,10 @@
   const root = document.getElementById('shop');
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const ui = { sort: 'new', sel: null, confirm: null, trackErr: '' };
+  const ui = { sort: 'new', sel: null, confirm: null, trackErr: '', busy: false };
   let lastRoute = '';
+  let booted = false;
+  const reading = new Set(); // đơn đang gửi yêu cầu "đã đọc", tránh gửi lặp
 
   // Thông tin đang điền ở bước Gửi file và Thanh toán (giữ khi tải lại trang)
   const CO_KEY = 'pinya-checkout';
@@ -70,8 +72,15 @@
     if (s.focus) { const el = document.getElementById(s.focus); if (el) el.focus({ preventScroll: true }); }
   }
 
+  function loadFailed() {
+    return `<div class="wrap page"><div class="panel empty"><h3>Chưa tải được cửa hàng</h3><p>${esc(P.errText(P.loadError()))}</p>
+      <button class="btn btn-cta btn-sm" type="button" onclick="location.reload()">Tải lại trang</button></div></div>`;
+  }
+
   function render() {
-    let db = P.load();
+    if (!booted) return;
+    if (P.loadError()) { root.innerHTML = loadFailed(); return; }
+    const db = P.load();
     const r = route();
     const key = r.view + ':' + (r.id || '');
     const keep = key === lastRoute ? snapshot() : null;
@@ -79,9 +88,9 @@
 
     if (r.view === 'order') {
       const o = P.findOrder(db, r.id);
-      if (o && phoneOk(o) && o.unreadCustomer) {
-        P.update(d => { const x = P.findOrder(d, r.id); if (x) P.act.markRead(d, x, 'customer'); });
-        db = P.load();
+      if (o && phoneOk(o) && o.unreadCustomer && !reading.has(o.id)) {
+        reading.add(o.id);
+        P.cust.action(o.id, 'mark_read').then(() => { reading.delete(o.id); render(); }, () => { reading.delete(o.id); });
       }
     }
 
@@ -606,9 +615,9 @@
 
   function viewOrder(db, id) {
     const o = P.findOrder(db, id);
-    if (!o) return notFound('Không tìm thấy đơn ' + id, 'Kiểm tra lại mã đơn, hoặc vào "Theo dõi đơn" để xem các đơn của bạn.');
-    if (!phoneOk(o)) {
-      return `<div class="wrap page">${trackForm(db, 'Xem đơn ' + esc(o.id), 'Nhập số điện thoại bạn dùng khi đặt đơn này để xem chi tiết.')}</div>`;
+    // Chưa nhập số điện thoại, hoặc đơn không thuộc số này: hỏi số điện thoại (không tiết lộ đơn có tồn tại hay không)
+    if (!o || !phoneOk(o)) {
+      return `<div class="wrap page">${trackForm(db, 'Xem đơn ' + esc(id), 'Nhập số điện thoại bạn dùng khi đặt đơn này để xem chi tiết.')}</div>`;
     }
     return `<div class="wrap page">
       <a class="back" href="#theo-doi">← Đơn của bạn</a>
@@ -647,10 +656,19 @@
     const el = document.getElementById(id);
     if (el) el.setAttribute('aria-invalid', msg ? 'true' : 'false');
   }
-  function withOrder(fn) {
+  // Thao tác của khách trên đơn đang xem. Chờ máy chủ trả lời rồi mới vẽ lại trang.
+  async function custAct(action, payload, okMsg) {
     const r = route();
-    if (r.view !== 'order') return;
-    P.update(d => { const o = P.findOrder(d, r.id); if (o && phoneOk(o)) fn(d, o); });
+    if (r.view !== 'order' || ui.busy) return false;
+    ui.busy = true;
+    try {
+      await P.cust.action(r.id, action, payload);
+      if (okMsg) P.ui.toast(okMsg);
+      return true;
+    } catch (e) {
+      P.ui.toast(P.errText(e));
+      return false;
+    } finally { ui.busy = false; render(); }
   }
   function toTop() { window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' }); }
 
@@ -701,8 +719,8 @@
       case 'track-clear': P.setTrack(''); ui.trackErr = ''; go('theo-doi'); return;
       case 'cancel-ask': ui.confirm = route().id; render(); return;
       case 'cancel-no': ui.confirm = null; render(); return;
-      case 'cancel-yes': withOrder((d, o) => P.act.cancel(d, o, 'Khách hủy đơn', 'customer')); ui.confirm = null; P.ui.toast('Đã hủy đơn.'); render(); return;
-      case 'paid': withOrder((d, o) => P.act.notifyPaid(d, o)); P.ui.toast('Đã báo chuyển khoản. Shop sẽ xác nhận sớm.'); render(); return;
+      case 'cancel-yes': ui.confirm = null; custAct('cancel', {}, 'Đã hủy đơn.'); return;
+      case 'paid': custAct('notify_paid', {}, 'Đã báo chuyển khoản. Shop sẽ xác nhận sớm.'); return;
       case 'reorder': {
         const db = P.load();
         const o = P.findOrder(db, route().id);
@@ -782,14 +800,16 @@
       const phone = P.normPhone(val('tr-phone'));
       if (phone.length < 9) { setErr('tr-phone', 'Nhập số điện thoại, ít nhất 9 chữ số.'); document.getElementById('tr-phone').focus(); return; }
       const r = route();
-      if (r.view === 'order') {
-        const o = P.findOrder(P.load(), r.id);
-        if (o && P.normPhone(o.phone) !== phone) { setErr('tr-phone', 'Số điện thoại không khớp với đơn này.'); return; }
-      }
+      if (ui.busy) return;
+      ui.busy = true;
       P.setTrack(phone);
-      ui.trackErr = '';
-      lastRoute = '';
-      render();
+      P.cust.track(phone).then(() => {
+        const o = r.view === 'order' ? P.findOrder(P.load(), r.id) : true;
+        if (!o || (o !== true && P.normPhone(o.phone) !== phone)) {
+          P.setTrack('');
+          ui.trackErr = 'Số điện thoại không khớp với đơn này.';
+        } else ui.trackErr = '';
+      }, e => { P.setTrack(''); ui.trackErr = P.errText(e); }).then(() => { ui.busy = false; lastRoute = ''; render(); });
       return;
     }
 
@@ -797,20 +817,16 @@
       const inp = document.getElementById('chat-input');
       const text = inp.value.trim();
       if (!text) return;
-      withOrder((d, o) => P.act.sendMessage(d, o, 'customer', text));
       inp.value = '';
-      render();
-      const again = document.getElementById('chat-input'); if (again) again.focus();
+      custAct('message', { text }).then(() => { const again = document.getElementById('chat-input'); if (again) again.focus(); });
       return;
     }
 
     if (f.id === 'refile-form') {
       const link = val('rf-link').trim();
       if (!P.isUrl(link)) { setErr('rf-link', 'Dán link bắt đầu bằng https://, ví dụ link Google Drive.'); return; }
-      withOrder((d, o) => P.act.setFile(d, o, link));
       document.getElementById('rf-link').value = '';
-      P.ui.toast('Đã cập nhật link file. Shop sẽ dùng file mới.');
-      render();
+      custAct('set_file', { file: link }, 'Đã cập nhật link file. Shop sẽ dùng file mới.');
       return;
     }
 
@@ -835,19 +851,25 @@
       bad.forEach(b => setErr(b[0], b[1]));
       if (bad.length) { document.getElementById(bad[0][0]).focus(); return; }
       const picked = +((f.querySelector('input[name="pay"]:checked') || {}).value || 100);
-      const o = P.update(d => {
-        const lines = P.cartLines(d);
-        if (!lines.length) return null;
-        const sub = lines.reduce((a, l) => a + l.line, 0);
-        const allowed = P.payOptions(d.settings, sub).map(x => x.pct);
-        const c = P.act.upsertCustomer(d, info);
-        return P.act.placeOrder(d, lines, Object.assign({}, info, { file: co.file, note: co.note || '', payPct: allowed.includes(picked) ? picked : 100 }), c.id);
+      const db = P.load();
+      const lines = P.cartLines(db);
+      if (!lines.length) { render(); return; }
+      if (ui.busy) return;
+      const sub = lines.reduce((a, l) => a + l.line, 0);
+      const allowed = P.payOptions(db.settings, sub).map(x => x.pct);
+      const btn = document.querySelector('button[form="checkout"]');
+      ui.busy = true; if (btn) { btn.disabled = true; btn.textContent = 'Đang gửi đơn…'; }
+      P.cust.submitOrder(lines, Object.assign({}, info, { file: co.file, note: co.note || '', payPct: allowed.includes(picked) ? picked : 100 })).then(o => {
+        P.setCart([]);
+        setCo({ ship: info });
+        P.setTrack(P.normPhone(info.phone));
+        ui.busy = false;
+        go('dat-xong-' + o.id);
+      }, e => {
+        ui.busy = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Đặt hàng'; }
+        P.ui.toast(P.errText(e));
       });
-      if (!o) { render(); return; }
-      P.setCart([]);
-      setCo({ ship: info });
-      P.setTrack(P.normPhone(info.phone));
-      go('dat-xong-' + o.id);
     }
   });
 
@@ -858,5 +880,5 @@
   });
   P.loadLogo(() => render());
   P.onChange(() => render());
-  render();
+  P.init('shop').then(() => { booted = true; render(); });
 })();

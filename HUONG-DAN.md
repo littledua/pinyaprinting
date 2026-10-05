@@ -1,6 +1,6 @@
 # Pinya Printing · web đặt in
 
-Web tĩnh (HTML/CSS/JS thuần), không cần cài đặt hay build. Mở `index.html` bằng trình duyệt là chạy.
+Web tĩnh (HTML/CSS/JS thuần), không cần cài đặt hay build. Mở `index.html` bằng trình duyệt là chạy (dữ liệu trên Supabase nếu `assets/config.js` có khóa).
 
 ## Các trang
 
@@ -44,16 +44,36 @@ Khách gửi nhầm file thì tự dán link mới trong trang theo dõi đơn. 
 ## Bắt đầu bán thật
 
 1. Vào admin → **Cài đặt**: sửa tên shop, mô tả, Zalo, email, tài khoản ngân hàng, tỷ lệ cọc.
-2. Cũng ở Cài đặt → **Xóa dữ liệu mẫu, bắt đầu bán thật**: xóa sản phẩm, đơn, khách mẫu; giữ 4 danh mục.
+2. (Chỉ chế độ chạy thử) Cũng ở Cài đặt → **Xóa dữ liệu mẫu, bắt đầu bán thật**. Bản nối Supabase bắt đầu trống, không có dữ liệu mẫu.
 3. Vào **Sản phẩm** → **Thêm sản phẩm**: tên, danh mục, mô tả, ảnh, rồi thêm từng phân loại với giá và số lượng tối thiểu.
 
-## Quan trọng trước khi chạy thật
+## Dữ liệu và máy chủ (Supabase)
 
-Bản này lưu dữ liệu trong **localStorage của trình duyệt**. Khách và shop chỉ thấy chung dữ liệu khi dùng cùng một máy, cùng trình duyệt. Đăng nhập admin cũng chỉ là giả lập.
+Web có hai chế độ, chọn bằng `assets/config.js`:
 
-Để khách ở máy khác đặt hàng mà shop nhận được, cần nối một backend (ví dụ Supabase: database, đăng nhập admin, lưu ảnh). Mọi chỗ đọc và ghi dữ liệu đã gom về `Pinya.load()`, `Pinya.update()` và `Pinya.act.*` trong `assets/pinya.js`, nên chỉ cần thay phần "LƯU TRỮ" trong file đó.
+- **Có địa chỉ và khóa Supabase** (đang dùng): dữ liệu nằm trên Supabase, khách ở máy nào đặt hàng shop cũng nhận được. Admin đăng nhập bằng tài khoản Supabase thật. Ảnh sản phẩm lưu ở kho ảnh `product-images`.
+- **Để trống `config.js`**: chế độ chạy thử, dữ liệu lưu trong trình duyệt, đăng nhập admin giả lập (`admin@example.com` / `demo`).
 
-Ảnh sản phẩm hiện được thu nhỏ và lưu thẳng trong trình duyệt, nên giới hạn khoảng vài chục ảnh. Khi có backend thì chuyển sang lưu ảnh trên máy chủ.
+Khóa `sb_publishable_...` được phép nằm trong mã web. Quyền thật do Row Level Security quyết định (xem `supabase/schema.sql`):
+
+- Ai cũng đọc được cài đặt, danh mục, sản phẩm. Chỉ admin đọc và ghi được mọi thứ còn lại (đơn, khách, xưởng, đơn in, kho).
+- Khách chưa đăng nhập chỉ làm được 3 việc, qua hàm trên máy chủ: đặt hàng, xem đơn theo số điện thoại, nhắn tin hoặc báo chuyển khoản hoặc đổi link file hoặc hủy đơn của chính mình. Giá luôn do máy chủ tính lại từ bảng sản phẩm. Thông tin nội bộ (xưởng, kho, cân nặng, phí ship) không gửi cho khách.
+- Admin mở nhiều thiết bị: web tự cập nhật mỗi 20 giây. Nếu khách vừa cập nhật đúng đơn bạn đang sửa, web tải lại dữ liệu mới và báo bạn làm lại, không ghi đè tin nhắn của khách.
+
+### Thiết lập lần đầu
+
+1. Chạy `supabase/schema.sql` trong Supabase → SQL Editor (nếu chưa chạy).
+2. Supabase → Authentication → Users → **Add user**, nhập email và mật khẩu, tích Auto Confirm.
+3. Cấp quyền quản trị cho tài khoản đó, chạy trong SQL Editor:
+   `insert into public.admins (user_id) select id from auth.users where email = 'email-cua-ban@...';`
+4. Authentication → Sign In / Providers: tắt **Allow new users to sign up** (shop không cần khách có tài khoản).
+5. Mở `admin.html`, đăng nhập. Lần đầu web tự tạo cài đặt và 4 danh mục.
+
+### Lưu ý
+
+- Gói miễn phí của Supabase tự **tạm dừng nếu 7 ngày không có truy cập**. Dự án bị dừng thì web báo "Chưa tải được cửa hàng". Vào dashboard bấm Restore là chạy lại, dữ liệu không mất.
+- Khách xem đơn bằng số điện thoại, ai biết số cũng xem được đơn của số đó. Nếu cần chặt hơn, thêm bước xác minh (mã đơn hoặc OTP) sau.
+- Nên tắt hoặc xóa các đơn thử trước khi bán thật.
 
 ## Cấu trúc file
 
@@ -61,7 +81,10 @@ Bản này lưu dữ liệu trong **localStorage của trình duyệt**. Khách 
 - `assets/app.css`: khung trang admin và các khối dùng chung
 - `assets/shop.css`, `assets/shop.js`: trang cửa hàng
 - `assets/admin.js`: trang quản trị
-- `assets/pinya.js`: dữ liệu, trạng thái đơn, tính tiền, dữ liệu mẫu
+- `assets/pinya.js`: dữ liệu, trạng thái đơn, tính tiền, giao diện tùy chỉnh, đồng bộ Supabase, dữ liệu mẫu (chế độ thử)
+- `assets/config.js`: địa chỉ và khóa Supabase
+- `assets/vendor/supabase.js`: thư viện kết nối Supabase (bản ghim, không cần CDN)
+- `supabase/schema.sql`: bảng, quyền truy cập, hàm cho khách, kho ảnh
 
 ## Đưa lên mạng (bản tĩnh)
 

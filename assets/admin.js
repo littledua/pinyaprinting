@@ -8,6 +8,8 @@
   // Mật khẩu chỉ dùng cho bản chạy thử. Bản thật phải kiểm tra đăng nhập ở máy chủ.
   const DEMO_PASS = 'demo';
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let booted = false;
+  const SYNC_TEXT = { ok: 'Đã lưu lên máy chủ', saving: 'Đang lưu…', error: 'Chưa lưu được, đang thử lại' };
 
   const ui = {
     q: '', status: 'all', cat: 'all', customer: null,
@@ -78,6 +80,12 @@
 
   // ==== Vẽ trang ====
   function render() {
+    if (!booted) return;
+    if (P.loadError()) {
+      app.innerHTML = `<div class="wrap page"><div class="panel empty"><h3>Chưa kết nối được máy chủ</h3><p>${esc(P.errText(P.loadError()))}</p>
+        <button class="btn btn-cta btn-sm" type="button" onclick="location.reload()">Tải lại trang</button></div></div>`;
+      return;
+    }
     let db = P.load();
     const sess = P.getSession(ROLE);
     const r = route();
@@ -146,6 +154,7 @@
       <div class="side-foot">
         <div class="side-user"><span class="avatar" aria-hidden="true">${P.logoSrc() ? `<img src="${esc(P.logoSrc())}" alt="">` : esc((s.adminName || 'A').trim().split(/\s+/).pop().charAt(0).toUpperCase())}</span>
           <div><b>${esc(s.adminName)}</b><small>${esc(s.adminEmail)}</small></div></div>
+        ${P.isCloud ? `<p class="sync" id="sync-state" data-s="${P.syncState()}" aria-live="polite">${SYNC_TEXT[P.syncState()] || ''}</p>` : ''}
         <a href="index.html">Xem cửa hàng</a>
         <button class="link-btn" type="button" data-act="logout" style="justify-self:start;padding-left:0">Đăng xuất</button>
       </div>
@@ -164,8 +173,8 @@
           <input id="al-pass" type="password" autocomplete="current-password" aria-describedby="err-al-pass"><p class="err" id="err-al-pass"></p></div>
         <button class="btn btn-cta" type="submit">Đăng nhập</button>
       </form>
-      <div class="login-alt"><span>Bản chạy thử: email <b>${esc(db.settings.adminEmail)}</b>, mật khẩu <b>demo</b>. Khi đưa lên mạng cần làm đăng nhập thật ở máy chủ.</span>
-        <button class="btn btn-quiet btn-sm" type="button" data-act="fill-demo">Điền tài khoản mẫu</button></div>
+      ${P.isCloud ? '' : `<div class="login-alt"><span>Bản chạy thử: email <b>${esc(db.settings.adminEmail)}</b>, mật khẩu <b>demo</b>. Chưa nối máy chủ nên đăng nhập chỉ là giả lập.</span>
+        <button class="btn btn-quiet btn-sm" type="button" data-act="fill-demo">Điền tài khoản mẫu</button></div>`}
       <div class="login-foot"><a href="index.html">← Về cửa hàng</a></div>
     </div></div>`;
   }
@@ -1185,10 +1194,11 @@
           ${f('s-holder', 'Chủ tài khoản', s.bankHolder)}
         </div>
         <h2 class="sec-title">Quản trị</h2>
-        <div class="form-grid">${f('s-admin', 'Tên hiển thị khi nhắn khách', s.adminName)}${f('s-email', 'Email đăng nhập', s.adminEmail, ' type="email"')}</div>
+        <div class="form-grid">${f('s-admin', 'Tên hiển thị khi nhắn khách', s.adminName)}${P.isCloud ? '' : f('s-email', 'Email đăng nhập', s.adminEmail, ' type="email"')}</div>
         <div class="actions"><button class="btn btn-cta" type="submit">Lưu cài đặt</button></div>
       </form>
-      <section class="panel" style="margin-top:20px"><div class="panel-h"><h2>Dữ liệu chạy thử</h2></div>
+      ${P.isCloud ? `<section class="panel" style="margin-top:20px"><div class="panel-h"><h2>Dữ liệu</h2></div>
+        <p class="muted">Dữ liệu đang lưu trên Supabase, mở ở thiết bị nào cũng thấy như nhau.</p></section>` : `<section class="panel" style="margin-top:20px"><div class="panel-h"><h2>Dữ liệu chạy thử</h2></div>
         <p class="muted">${demoCount ? `Đang có ${demoCount} sản phẩm và đơn mẫu để xem thử.` : 'Không còn dữ liệu mẫu.'} Dữ liệu đang lưu trong trình duyệt này.</p>
         ${ask === 'clear' ? `<div class="confirm"><p>Xóa toàn bộ sản phẩm, đơn, khách và xưởng mẫu? Danh mục và cài đặt giữ nguyên.</p><div class="actions" style="margin-top:0">
               <button class="btn btn-danger btn-sm" type="button" data-act="clear-yes">Xóa dữ liệu mẫu</button><button class="btn btn-quiet btn-sm" type="button" data-act="data-no">Không</button></div></div>`
@@ -1196,9 +1206,9 @@
               <button class="btn btn-danger btn-sm" type="button" data-act="reset-yes">Khôi phục dữ liệu mẫu</button><button class="btn btn-quiet btn-sm" type="button" data-act="data-no">Không</button></div></div>`
           : `<div class="actions">${demoCount ? '<button class="btn btn-quiet btn-sm" type="button" data-act="clear-ask">Xóa dữ liệu mẫu, bắt đầu bán thật</button>' : ''}
               <button class="link-btn" type="button" data-act="reset-ask">Khôi phục dữ liệu mẫu</button></div>`}
-      </section>
+      </section>`}
       <section class="panel" style="margin-top:20px"><div class="panel-h"><h2>Phiên đăng nhập</h2></div>
-        <p class="muted">Đang đăng nhập bằng ${esc(s.adminEmail)}.</p>
+        <p class="muted">Đang đăng nhập bằng ${esc(P.isCloud ? (P.getSession(ROLE) || {}).email : s.adminEmail)}.</p>
         <div class="actions"><button class="btn btn-quiet btn-sm" type="button" data-act="logout">Đăng xuất</button></div>
       </section>`;
   }
@@ -1221,9 +1231,10 @@
   function done(msg) { P.ui.toast(msg); render(); }
   function toTop() { window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' }); }
   function addImages(files, onDone) {
-    Promise.all(files.map(f => P.ui.fileToDataUrl(f).catch(() => null))).then(list => {
+    if (P.isCloud) P.ui.toast('Đang tải ảnh lên…');
+    Promise.all(files.map(f => P.ui.fileToDataUrl(f).then(u => P.uploadImage(u)).catch(e => (e && e.message === 'not-image' ? null : (P.ui.toast(P.errText(e)), null))))).then(list => {
       const ok = list.filter(Boolean);
-      if (ok.length < files.length) P.ui.toast('Có file không phải ảnh nên đã bỏ qua.');
+      if (ok.length < files.length) P.ui.toast('Có file không tải lên được, đã bỏ qua.');
       onDone(ok);
       render();
     });
@@ -1252,7 +1263,9 @@
     const db = P.load();
     const i = +t.dataset.i;
     switch (a) {
-      case 'logout': P.setSession(ROLE, null); history.replaceState(null, '', location.pathname); render(); return;
+      case 'logout':
+        if (P.isCloud) { P.auth.signOut().then(() => { lastRoute = ''; history.replaceState(null, '', location.pathname); render(); }); return; }
+        P.setSession(ROLE, null); history.replaceState(null, '', location.pathname); render(); return;
       case 'fill-demo':
         document.getElementById('al-email').value = db.settings.adminEmail;
         document.getElementById('al-pass').value = DEMO_PASS;
@@ -1709,6 +1722,17 @@
       const s = P.load().settings;
       setErr('al-email', ''); setErr('al-pass', '');
       if (!email) { setErr('al-email', 'Nhập email đăng nhập.'); return; }
+      if (P.isCloud) {
+        if (!val('al-pass')) { setErr('al-pass', 'Nhập mật khẩu.'); return; }
+        const btn = f.querySelector('button[type="submit"]');
+        if (btn) { btn.disabled = true; btn.textContent = 'Đang đăng nhập…'; }
+        P.auth.signIn(email, val('al-pass')).then(r => {
+          if (!r.ok) { render(); setErr('al-pass', r.error); const el = document.getElementById('al-email'); if (el) el.value = email; return; }
+          lastRoute = '';
+          render();
+        });
+        return;
+      }
       if (email !== String(s.adminEmail).toLowerCase() || val('al-pass') !== DEMO_PASS) { setErr('al-pass', 'Email hoặc mật khẩu chưa đúng.'); return; }
       P.setSession(ROLE, { email });
       lastRoute = '';
@@ -1817,7 +1841,7 @@
       if (!(th > 0)) bad.push(['s-th', 'Nhập mốc giá trị đơn, ví dụ 1.000.000.']);
       if (!(dlow > 0 && dlow < 100)) bad.push(['s-dlow', 'Nhập tỷ lệ cọc từ 1 đến 99.']);
       if (!(dhigh > 0 && dhigh < 100)) bad.push(['s-dhigh', 'Nhập tỷ lệ cọc từ 1 đến 99.']);
-      if (!/^\S+@\S+\.\S+$/.test(email)) bad.push(['s-email', 'Nhập email hợp lệ.']);
+      if (!P.isCloud && !/^\S+@\S+\.\S+$/.test(email)) bad.push(['s-email', 'Nhập email hợp lệ.']);
       ['s-name', 's-zalo', 's-th', 's-dlow', 's-dhigh', 's-email'].forEach(id => setErr(id, ''));
       bad.forEach(b => setErr(b[0], b[1]));
       if (bad.length) { document.getElementById(bad[0][0]).focus(); return; }
@@ -1826,8 +1850,8 @@
         zalo: P.normPhone(val('s-zalo')), email: val('s-shopmail').trim(), hours: val('s-hours').trim(), address: val('s-address').trim(),
         facebook: val('s-fb').trim(), instagram: val('s-ig').trim(),
         payThreshold: Math.round(th), depositLow: Math.round(dlow), depositHigh: Math.round(dhigh), bankName: val('s-bank').trim(), bankNumber: val('s-acc').trim(), bankHolder: val('s-holder').trim(),
-        adminName: val('s-admin').trim() || name, adminEmail: email
-      }));
+        adminName: val('s-admin').trim() || name
+      }, P.isCloud ? {} : { adminEmail: email }));
       lastRoute = '';
       done('Đã lưu cài đặt. Cửa hàng đã cập nhật.');
     }
@@ -1844,5 +1868,11 @@
   });
   P.loadLogo(() => render());
   P.onChange(kind => { if (kind === 'db') render(); });
-  render();
+  window.addEventListener('pinya:conflict', () => { P.ui.toast('Khách vừa cập nhật đơn này nên mình đã tải lại dữ liệu mới nhất. Bạn làm lại thao tác nhé.'); render(); });
+  window.addEventListener('pinya:auth-lost', () => { P.ui.toast('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.'); lastRoute = ''; render(); });
+  window.addEventListener('pinya:sync', e => {
+    const el = document.getElementById('sync-state');
+    if (el) { el.textContent = SYNC_TEXT[e.detail] || ''; el.dataset.s = e.detail; }
+  });
+  P.init('admin').then(() => { booted = true; render(); });
 })();

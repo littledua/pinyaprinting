@@ -582,6 +582,7 @@
   let memCart = [];
 
   function load() {
+    if (CLOUD) { if (!memory) memory = emptyDb(); return memory; }
     try {
       const raw = localStorage.getItem(DB_KEY);
       if (raw) {
@@ -606,6 +607,7 @@
 
   function persist(d) {
     memory = d;
+    if (CLOUD) { if (pageRole === 'admin' && adminOk) scheduleFlush(); return true; }
     try { localStorage.setItem(DB_KEY, JSON.stringify(d)); return true; }
     catch (e) {
       window.dispatchEvent(new CustomEvent('pinya:save-error'));
@@ -621,7 +623,7 @@
     return r;
   }
 
-  function reset() { memory = seed(); persist(memory); return memory; }
+  function reset() { if (CLOUD) return memory; memory = seed(); persist(memory); return memory; }
 
   // Bỏ đơn in đã xóa khỏi các khoản phụ phí; khoản nào hết đơn in thì xóa luôn
   function pruneJobFees(d) {
@@ -631,6 +633,7 @@
 
   // Bắt đầu trống: giữ danh mục và cài đặt; xóa sản phẩm, đơn, khách, xưởng mẫu
   function clearDemo() {
+    if (CLOUD) return;
     return update(d => {
       d.products = d.products.filter(p => !p.demo);
       d.orders = d.orders.filter(o => !o.demo);
@@ -644,6 +647,7 @@
   }
 
   function onChange(cb) {
+    changeCbs.push(cb);
     window.addEventListener('storage', e => {
       if (e.key === DB_KEY) { memory = null; cb('db'); }
       if (e.key === CART_KEY) cb('cart');
@@ -651,10 +655,12 @@
   }
 
   function getSession(role) {
+    if (CLOUD && role === 'admin') return adminOk ? { email: adminEmail } : null;
     try { return JSON.parse(localStorage.getItem(SESSION_KEY + role) || 'null'); }
     catch (e) { return memSession[role] || null; }
   }
   function setSession(role, val) {
+    if (CLOUD) return; // bản Supabase: phiên đăng nhập do Supabase giữ
     memSession[role] = val;
     try {
       if (val) localStorage.setItem(SESSION_KEY + role, JSON.stringify(val));
@@ -911,6 +917,327 @@
     }
   };
 
+  // ==== SUPABASE ====
+  // Bật khi assets/config.js có địa chỉ và khóa. Không có thì web chạy chế độ thử, lưu trong trình duyệt.
+  // Ý tưởng: bộ nhớ trong trang (memory) vẫn là nguồn đọc đồng bộ như cũ; mọi thay đổi của quản trị được so với
+  // bản đã đồng bộ rồi ghi lên bảng "records". Khách không ghi trực tiếp, chỉ gọi 3 hàm đặt hàng/xem đơn/thao tác đơn.
+  const CFG = window.PINYA_CONFIG || {};
+  const CLOUD = !!(CFG.supabaseUrl && CFG.supabaseKey);
+  const SEP = '\u0001';
+  const PUBLIC_KINDS = ['settings', 'category', 'product'];
+  const COLLECTIONS = [['category', 'categories'], ['product', 'products'], ['customer', 'customers'], ['factory', 'factories'],
+    ['logistic', 'logistics'], ['printjob', 'printJobs'], ['jobfee', 'jobFees'], ['preset', 'variantPresets'], ['order', 'orders']];
+  let sb = null, pageRole = 'shop', adminOk = false, adminEmail = '', loadError = null;
+  const synced = new Map(); // khóa → { json, ts }: trạng thái đã có trên máy chủ
+  const changeCbs = [];
+  let serverHasSettings = false;
+  let lastPull = '', flushing = false, again = false, retryT = null, pollT = null, syncState = 'ok', pollBound = false;
+
+  const emitChange = () => changeCbs.forEach(cb => { try { cb('db'); } catch (e) {} });
+  const setSync = st => { syncState = st; window.dispatchEvent(new CustomEvent('pinya:sync', { detail: st })); };
+  const errText = e => {
+    const m = String((e && e.message) || e || '');
+    if (/fetch|network|load failed|timeout/i.test(m)) return 'Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.';
+    return m || 'Có lỗi xảy ra, thử lại sau.';
+  };
+
+  function emptyDb() {
+    return { version: VERSION, seq: 0, jobSeq: 0, settings: baseSettings(), categories: [], products: [], customers: [], factories: [],
+      logistics: [], printJobs: [], jobFees: [], variantPresets: [], orders: [] };
+  }
+
+  // Mọi thứ trong db thành các dòng (kind, id, data). adminEmail không đưa lên máy chủ (đăng nhập do Supabase quản).
+  function flatten(d) {
+    const m = new Map();
+    const add = (kind, id, data, extra) => m.set(kind + SEP + id, Object.assign({ kind, id, data, pos: 0, phone: null }, extra));
+    const st = Object.assign({}, d.settings); delete st.adminEmail;
+    add('settings', 'main', st);
+    COLLECTIONS.forEach(([kind, key]) => (d[key] || []).forEach((x, i) => add(kind, x.id, x, {
+      pos: kind === 'category' ? i : 0,
+      phone: kind === 'order' || kind === 'customer' ? normPhone(x.phone) : null
+    })));
+    add('meta', 'counters', { jobSeq: d.jobSeq || 0 });
+    return m;
+  }
+  const sig = v => JSON.stringify([v.data, v.pos]);
+
+  const byCreatedDesc = (a, b) => (b.data.createdAt || 0) - (a.data.createdAt || 0);
+  const byCreatedAsc = (a, b) => (a.data.createdAt || 0) - (b.data.createdAt || 0);
+  const byRowCreated = (a, b) => String(a.created_at).localeCompare(String(b.created_at));
+  const sorter = kind => kind === 'category' ? ((a, b) => a.pos - b.pos)
+    : ['product', 'printjob', 'jobfee'].includes(kind) ? byCreatedDesc
+    : ['order', 'customer'].includes(kind) ? byCreatedAsc : byRowCreated;
+
+  function applySettings(d, data) {
+    d.settings = Object.assign(baseSettings(), data || {});
+    d.settings.look = normLook(d.settings.look);
+  }
+
+  function buildFromRows(rows) {
+    const d = emptyDb();
+    const by = {};
+    rows.forEach(r => { (by[r.kind] = by[r.kind] || []).push(r); });
+    applySettings(d, (by.settings || [])[0] && by.settings[0].data);
+    COLLECTIONS.forEach(([kind, key]) => { d[key] = (by[kind] || []).sort(sorter(kind)).map(r => r.data); });
+    const meta = (by.meta || []).find(r => r.id === 'counters');
+    d.jobSeq = meta ? +meta.data.jobSeq || 0 : 0;
+    memory = d;
+    // Gốc so sánh lấy từ chính bộ nhớ vừa dựng, để giá trị mặc định thêm vào không bị coi là thay đổi chưa lưu
+    const flat = flatten(d);
+    synced.clear();
+    const ts = {}; rows.forEach(r => { ts[r.kind + SEP + r.id] = r.updated_at; });
+    serverHasSettings = !!(by.settings && by.settings.length);
+    // Mọi thứ hiện có coi là đã đồng bộ. Riêng cài đặt khi máy chủ còn trống: để chưa đồng bộ, lần đăng nhập đầu sẽ ghi lên.
+    flat.forEach((v, k) => { if (serverHasSettings || k !== 'settings' + SEP + 'main') synced.set(k, { json: sig(v), ts: ts[k] || '' }); });
+    lastPull = rows.reduce((a, r) => (r.updated_at > a ? r.updated_at : a), '');
+  }
+
+  async function fetchRows(kinds, since) {
+    let rows = [], from = 0;
+    for (;;) {
+      let q = sb.from('records').select('kind,id,data,phone,pos,created_at,updated_at')
+        .order('updated_at', { ascending: true }).order('kind').order('id').range(from, from + 999);
+      if (kinds) q = q.in('kind', kinds);
+      if (since) q = q.gt('updated_at', since);
+      const { data, error } = await q;
+      if (error) throw error;
+      rows = rows.concat(data || []);
+      if (!data || data.length < 1000) break;
+      from += 1000;
+    }
+    return rows;
+  }
+  async function fetchAll() {
+    buildFromRows(await fetchRows(pageRole === 'admin' && adminOk ? null : PUBLIC_KINDS));
+  }
+
+  function diff() {
+    const cur = flatten(memory);
+    const ups = [], dels = [];
+    cur.forEach((v, k) => { const j = sig(v); const s = synced.get(k); if (!s || s.json !== j) ups.push({ k, v, j, s }); });
+    synced.forEach((s, k) => { if (!cur.has(k)) dels.push({ k, s }); });
+    return { ups, dels };
+  }
+  const pendingCount = () => { if (!CLOUD || !memory || !adminOk) return 0; const d = diff(); return d.ups.length + d.dels.length; };
+
+  function scheduleFlush() { setSync('saving'); clearTimeout(retryT); setTimeout(flush, 0); }
+
+  async function flush() {
+    if (flushing) { again = true; return; }
+    flushing = true;
+    try {
+      do {
+        again = false;
+        const { ups, dels } = diff();
+        // xóa
+        const gone = {};
+        dels.forEach(x => { const [kind, id] = x.k.split(SEP); (gone[kind] = gone[kind] || []).push(id); });
+        for (const kind of Object.keys(gone)) {
+          const { error } = await sb.from('records').delete().eq('kind', kind).in('id', gone[kind]);
+          if (error) throw error;
+          gone[kind].forEach(id => synced.delete(kind + SEP + id));
+        }
+        // đơn đã có: ghi kèm điều kiện updated_at, nếu khách vừa cập nhật đơn thì báo xung đột
+        const orders = ups.filter(x => x.v.kind === 'order' && x.s);
+        const rest = ups.filter(x => !(x.v.kind === 'order' && x.s));
+        for (const x of orders) {
+          const { data, error } = await sb.from('records').update({ data: x.v.data, phone: x.v.phone })
+            .eq('kind', 'order').eq('id', x.v.id).eq('updated_at', x.s.ts).select('updated_at');
+          if (error) throw error;
+          if (!data || !data.length) {
+            await fetchAll();
+            setSync('ok');
+            window.dispatchEvent(new CustomEvent('pinya:conflict'));
+            emitChange();
+            return;
+          }
+          synced.set(x.k, { json: x.j, ts: data[0].updated_at });
+        }
+        for (let i = 0; i < rest.length; i += 100) {
+          const chunk = rest.slice(i, i + 100);
+          const { data, error } = await sb.from('records')
+            .upsert(chunk.map(x => ({ kind: x.v.kind, id: x.v.id, data: x.v.data, phone: x.v.phone, pos: x.v.pos })), { onConflict: 'kind,id' })
+            .select('kind,id,updated_at');
+          if (error) throw error;
+          const ts = {}; (data || []).forEach(r => { ts[r.kind + SEP + r.id] = r.updated_at; });
+          chunk.forEach(x => synced.set(x.k, { json: x.j, ts: ts[x.k] || (x.s && x.s.ts) || '' }));
+        }
+        if (!again && pendingCount()) again = true;
+      } while (again);
+      setSync('ok');
+    } catch (e) {
+      const authLost = e && (e.status === 401 || e.status === 403 || e.code === '42501' || /jwt/i.test(String(e.message || '')));
+      if (authLost) {
+        adminOk = false;
+        setSync('error');
+        window.dispatchEvent(new CustomEvent('pinya:auth-lost'));
+      } else {
+        setSync('error');
+        window.dispatchEvent(new CustomEvent('pinya:save-error', { detail: errText(e) }));
+        retryT = setTimeout(flush, 8000);
+      }
+    } finally { flushing = false; }
+  }
+
+  // Ghép các dòng mới từ máy chủ vào bộ nhớ (quản trị mở nhiều thiết bị, hoặc khách vừa nhắn tin)
+  function mergeRows(rows) {
+    rows.forEach(r => {
+      if (r.kind === 'settings') applySettings(memory, r.data);
+      else if (r.kind === 'meta') { if (r.id === 'counters') memory.jobSeq = +r.data.jobSeq || 0; }
+      else {
+        const col = COLLECTIONS.find(c => c[0] === r.kind);
+        if (!col) return;
+        const arr = memory[col[1]];
+        const i = arr.findIndex(x => x.id === r.id);
+        if (i >= 0) arr[i] = r.data; else arr.push(r.data);
+        if (r.kind === 'category') {
+          const pos = {}; rows.filter(x => x.kind === 'category').forEach(x => { pos[x.id] = x.pos; });
+          arr.sort((a, b) => (pos[a.id] != null ? pos[a.id] : 1e9) - (pos[b.id] != null ? pos[b.id] : 1e9));
+        } else if (['product', 'printjob', 'jobfee'].includes(r.kind)) arr.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        else if (['order', 'customer'].includes(r.kind)) arr.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      }
+    });
+    const flat = flatten(memory);
+    rows.forEach(r => { const k = r.kind + SEP + r.id; if (flat.has(k)) synced.set(k, { json: sig(flat.get(k)), ts: r.updated_at }); });
+  }
+
+  async function pullChanges() {
+    if (!sb || pageRole !== 'admin' || !adminOk || flushing || document.hidden || pendingCount()) return;
+    const rows = await fetchRows(null, lastPull);
+    if (!rows.length) return;
+    rows.forEach(r => { if (r.updated_at > lastPull) lastPull = r.updated_at; });
+    const fresh = rows.filter(r => { const s = synced.get(r.kind + SEP + r.id); return !s || s.ts !== r.updated_at; });
+    if (!fresh.length) return;
+    mergeRows(fresh);
+    emitChange();
+  }
+
+  async function checkAdmin() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { adminOk = false; adminEmail = ''; return false; }
+    const { data, error } = await sb.rpc('is_admin');
+    adminOk = !error && data === true;
+    adminEmail = adminOk ? (session.user.email || '') : '';
+    return adminOk;
+  }
+
+  // Lần đầu quản trị đăng nhập vào máy chủ còn trống: tạo cài đặt và 4 danh mục mặc định
+  function ensureSeed() {
+    if (!serverHasSettings) {
+      memory.categories = baseCategories();
+      scheduleFlush();
+    }
+  }
+
+  function startPolling() {
+    clearInterval(pollT);
+    const tick = () => {
+      if (document.hidden) return;
+      if (pageRole === 'admin') pullChanges().catch(() => {});
+      else if (getTrack()) cust.refresh().catch(() => {});
+    };
+    pollT = setInterval(tick, 20000);
+    if (!pollBound) { pollBound = true; document.addEventListener('visibilitychange', tick); }
+  }
+
+  async function init(r) {
+    pageRole = r === 'admin' ? 'admin' : 'shop';
+    if (!CLOUD) { load(); return; }
+    try {
+      if (!window.supabase || !window.supabase.createClient) throw new Error('Không tải được thư viện kết nối máy chủ. Kiểm tra mạng rồi tải lại trang.');
+      sb = sb || window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true } });
+      if (pageRole === 'admin') await checkAdmin();
+      await fetchAll();
+      if (pageRole === 'admin' && adminOk) ensureSeed();
+      if (pageRole === 'shop' && getTrack()) { try { await cust.track(getTrack()); } catch (e) {} }
+      startPolling();
+    } catch (e) { loadError = e; }
+    if (pageRole === 'admin') window.addEventListener('beforeunload', e => { if (flushing || pendingCount()) { e.preventDefault(); e.returnValue = ''; } });
+  }
+
+  const auth = {
+    async signIn(email, pass) {
+      if (!CLOUD) return { ok: false, error: 'Chưa cấu hình.' };
+      try {
+        const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+        if (error) return { ok: false, error: /invalid/i.test(error.message) ? 'Email hoặc mật khẩu chưa đúng.' : errText(error) };
+        if (!(await checkAdmin())) { await sb.auth.signOut(); return { ok: false, error: 'Tài khoản này chưa được cấp quyền quản trị.' }; }
+        await fetchAll();
+        ensureSeed();
+        startPolling();
+        return { ok: true };
+      } catch (e) { return { ok: false, error: errText(e) }; }
+    },
+    async signOut() {
+      try { await sb.auth.signOut(); } catch (e) {}
+      adminOk = false; adminEmail = '';
+      try { await fetchAll(); } catch (e) {}
+    }
+  };
+
+  // ==== Khách: đặt hàng và theo dõi đơn (qua hàm trên Supabase, hoặc ghi thẳng bộ nhớ ở chế độ thử) ====
+  const cust = {
+    async track(phone) {
+      phone = normPhone(phone);
+      if (!CLOUD) return ordersByPhone(load(), phone);
+      const { data, error } = await sb.rpc('track_orders', { p_phone: phone });
+      if (error) throw error;
+      load().orders = data || [];
+      return load().orders;
+    },
+    async refresh() {
+      const phone = getTrack();
+      if (!CLOUD || !phone) return;
+      const before = JSON.stringify(load().orders);
+      await cust.track(phone);
+      if (JSON.stringify(load().orders) !== before) emitChange();
+    },
+    async submitOrder(lines, info) {
+      if (!CLOUD) return update(d => { const c = act.upsertCustomer(d, info); return act.placeOrder(d, lines, info, c.id); });
+      const { data, error } = await sb.rpc('submit_order', { p_order: {
+        name: info.name, phone: normPhone(info.phone), social: info.social || '', address: info.address || '', city: info.city || '',
+        file: info.file || '', note: info.note || '', payPct: info.payPct,
+        items: lines.map(l => ({ productId: l.pid, variantId: l.vid, qty: l.qty }))
+      } });
+      if (error) throw error;
+      const db = load();
+      db.orders = (db.orders || []).filter(o => o.id !== data.id).concat(data);
+      return data;
+    },
+    // action: message | notify_paid | set_file | cancel | mark_read
+    async action(id, action, payload) {
+      payload = payload || {};
+      if (!CLOUD) {
+        update(d => {
+          const o = findOrder(d, id);
+          if (!o || normPhone(o.phone) !== normPhone(getTrack())) return;
+          if (action === 'message') act.sendMessage(d, o, 'customer', payload.text);
+          else if (action === 'notify_paid') act.notifyPaid(d, o);
+          else if (action === 'set_file') act.setFile(d, o, payload.file);
+          else if (action === 'cancel') act.cancel(d, o, 'Khách hủy đơn', 'customer');
+          else if (action === 'mark_read') act.markRead(d, o, 'customer');
+        });
+        return findOrder(load(), id);
+      }
+      const { data, error } = await sb.rpc('customer_action', { p_id: id, p_phone: getTrack(), p_action: action, p_payload: payload });
+      if (error) throw error;
+      const db = load();
+      const i = db.orders.findIndex(o => o.id === id);
+      if (i >= 0) db.orders[i] = data; else db.orders.push(data);
+      return data;
+    }
+  };
+
+  // Ảnh sản phẩm: lên kho ảnh của Supabase, trong sản phẩm chỉ lưu địa chỉ ảnh
+  async function uploadImage(dataUrl) {
+    if (!CLOUD || !adminOk) return dataUrl;
+    const blob = await (await fetch(dataUrl)).blob();
+    const path = 'p/' + uid('i') + '.jpg';
+    const { error } = await sb.storage.from('product-images').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' });
+    if (error) throw error;
+    return sb.storage.from('product-images').getPublicUrl(path).data.publicUrl;
+  }
+
   // Mã danh mục dạng chữ không dấu, dùng làm neo liên kết (#dm-in-giay)
   function slugify(s) {
     return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D')
@@ -1014,7 +1341,9 @@
   }
 
   try { applyLook(load().settings.look); } catch (e) {}
-  window.addEventListener('pinya:save-error', () => toast('Không lưu được: bộ nhớ trình duyệt đã đầy hoặc bị chặn. Thử bớt ảnh sản phẩm.'));
+  window.addEventListener('pinya:save-error', e => toast(CLOUD
+    ? 'Chưa lưu được lên máy chủ. ' + ((e.detail || '') + ' Web sẽ tự thử lại.').trim()
+    : 'Không lưu được: bộ nhớ trình duyệt đã đầy hoặc bị chặn. Thử bớt ảnh sản phẩm.'));
 
   window.Pinya = {
     BRAND, INKS, STATUSES, STATUS_ORDER, STAGES, SHIP_METHODS, SHIP_STAGES, CITIES, DEST, DAY: D,
@@ -1028,6 +1357,8 @@
     LOGO, loadLogo, brandMark, hasLogo: () => !!logoSrc(), logoSrc,
     SHOW_KEYS, THEMES, MODES, FONTS, SIZE_NAMES, baseLook, normLook, applyLook, lookOf, showSection, catVisible, visibleCategories,
     feeShares, feesOfJob, jobFeeTotal, jobFullCost, QTY_PRESETS, qtyPresets, parseTiers, qtyVariants,
+    isCloud: CLOUD, init, auth, cust, uploadImage, errText, pendingCount,
+    syncState: () => syncState, loadError: () => loadError,
     act, ui: { toast, copyText, selectText, lightbox, fileToDataUrl }
   };
 })();
