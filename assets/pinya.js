@@ -1256,6 +1256,25 @@
     }
   };
 
+  // Lấy ảnh từ link bài đăng: máy chủ (Edge Function import-images) tìm ảnh trong trang, rồi tải ảnh đã chọn về kho ảnh.
+  // Link nguồn chỉ dùng lúc lấy, không được lưu vào sản phẩm.
+  async function callImageFn(body) {
+    if (!CLOUD || !adminOk) throw new Error('Cần đăng nhập quản trị và nối máy chủ để lấy ảnh từ link.');
+    const { data, error } = await sb.functions.invoke('import-images', { body });
+    if (error) {
+      let msg = errText(error);
+      try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (e) {}
+      throw new Error(msg);
+    }
+    if (data && data.error) throw new Error(data.error);
+    return data;
+  }
+  const imageImport = {
+    available: () => CLOUD && adminOk,
+    scan: async url => (await callImageFn({ action: 'scan', url })).images || [],
+    save: async (urls, referer) => { const r = await callImageFn({ action: 'import', urls, referer }); return { saved: r.saved || [], failed: r.failed || 0, lastError: r.lastError || '' }; }
+  };
+
   // Ảnh sản phẩm: lên kho ảnh của Supabase, trong sản phẩm chỉ lưu địa chỉ ảnh
   async function uploadImage(dataUrl) {
     if (!CLOUD || !adminOk) return dataUrl;
@@ -1386,7 +1405,7 @@
     SHOW_KEYS, THEMES, MODES, FONTS, SIZE_NAMES, baseLook, normLook, applyLook, lookOf, showSection, catVisible, visibleCategories,
     feeShares, feesOfJob, jobFeeTotal, jobFullCost,
     libGroup, groupName, groupOptions, combos, skuKey, rebuildSkus, variantsFromSkus, pickVariant,
-    isCloud: CLOUD, init, auth, cust, uploadImage, errText, pendingCount,
+    isCloud: CLOUD, init, auth, cust, uploadImage, imageImport, errText, pendingCount,
     syncState: () => syncState, loadError: () => loadError,
     act, ui: { toast, copyText, selectText, lightbox, fileToDataUrl }
   };

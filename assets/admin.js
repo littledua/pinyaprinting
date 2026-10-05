@@ -22,7 +22,8 @@
     cEdit: null, cDel: null, fEdit: null, dataAsk: null,
     look: null,
     feEdit: null, feDraft: null, feDel: null,
-    gCustom: null, libDel: null, libEdit: null, joq: '', npq: ''
+    gCustom: null, libDel: null, libEdit: null, joq: '', npq: '',
+    imp: { open: false, url: '', busy: false, err: '', msg: '', found: [], picked: new Set() }
   };
   let lastRoute = '';
 
@@ -650,6 +651,26 @@
       <p class="err" id="err-pf-variants" style="margin-top:8px"></p></section>`;
   }
 
+  // Lấy ảnh từ link một bài đăng bất kỳ: máy chủ tìm ảnh, bạn tích chọn, ảnh được tải về kho của shop.
+  const IMP_MAX = 12;
+  function importBox() {
+    const m = ui.imp;
+    if (!P.imageImport.available()) {
+      return '<div class="imp"><p class="muted">Tính năng này cần nối máy chủ (Supabase) và đăng nhập quản trị.</p></div>';
+    }
+    const grid = m.found.length ? `<div class="imp-grid" role="group" aria-label="Ảnh tìm thấy">${m.found.map((u, i) => `<label class="imp-item${m.picked.has(i) ? ' on' : ''}">
+        <img src="${esc(u)}" alt="Ảnh ${i + 1}" loading="lazy" referrerpolicy="no-referrer"><input type="checkbox" class="imp-pick" data-nokeep="1" data-i="${i}"${m.picked.has(i) ? ' checked' : ''} aria-label="Chọn ảnh ${i + 1}"></label>`).join('')}</div>
+      <div class="actions" style="margin-top:10px"><button class="btn btn-cta btn-sm" type="button" data-act="imp-save"${m.busy || !m.picked.size ? ' disabled' : ''}>${m.busy ? 'Đang lấy ảnh…' : 'Lấy ' + m.picked.size + ' ảnh đã chọn'}</button>
+        <button class="link-btn" type="button" data-act="imp-all">Chọn tất cả</button><button class="link-btn" type="button" data-act="imp-none">Bỏ chọn</button></div>` : '';
+    return `<div class="imp">
+      <div class="g-addval"><label class="sr-only" for="imp-url">Link bài đăng</label>
+        <input id="imp-url" data-nokeep="1" data-imp="url" value="${esc(m.url)}" placeholder="Dán link bài đăng hoặc trang có ảnh" autocomplete="off" inputmode="url">
+        <button class="btn btn-quiet btn-sm" type="button" data-act="imp-scan"${m.busy ? ' disabled' : ''}>${m.busy && !m.found.length ? 'Đang tìm…' : 'Tìm ảnh'}</button></div>
+      ${m.err ? `<p class="err" style="display:block">${esc(m.err)}</p>` : ''}${m.msg ? `<p class="hint">${esc(m.msg)}</p>` : ''}
+      ${grid}
+      <p class="hint" style="margin-top:8px">Ảnh được tải về kho của shop, link không được lưu và khách không nhìn thấy. Chỉ lấy ảnh bạn có quyền dùng. Facebook, Instagram, Shopee thường chặn hoặc chỉ cho xem sau khi đăng nhập, nếu không ra ảnh thì dán link ảnh trực tiếp hoặc dùng nút Thêm ảnh.</p></div>`;
+  }
+
   // Giữ thứ tự giá trị theo danh sách gốc (thư viện hoặc nhóm riêng)
   function sortValues(db, g) {
     const opts = P.groupOptions(db, g);
@@ -741,7 +762,9 @@
             <div class="actions" style="margin-top:10px">
               <input id="pimg-files" type="file" accept="image/*" multiple class="sr-only file-in">
               <label class="btn btn-quiet btn-sm" for="pimg-files">Thêm ảnh</label>
+              <button class="btn btn-quiet btn-sm" type="button" data-act="imp-toggle" aria-expanded="${ui.imp.open}">Lấy ảnh từ link</button>
             </div>
+            ${ui.imp.open ? importBox() : ''}
           </section>
           <section class="panel"><div class="panel-h"><h2>Trạng thái</h2></div>
             <div class="checks">
@@ -1423,6 +1446,36 @@
       case 'lk-avatar-rm': ui.look.avatar = ''; render(); return;
       case 'lk-reset': { const keepAvatar = ui.look.avatar; ui.look = Object.assign(P.baseLook(), { avatar: keepAvatar }); render(); return; }
       case 'lk-undo': ui.look = null; render(); P.ui.toast('Đã trả về bản đang lưu.'); return;
+      // Lấy ảnh từ link
+      case 'imp-toggle': ui.imp.open = !ui.imp.open; render(); { const n = document.getElementById('imp-url'); if (n) n.focus(); } return;
+      case 'imp-scan': {
+        const m = ui.imp, url = m.url.trim();
+        if (!url) { m.err = 'Dán link bài đăng trước.'; m.msg = ''; render(); return; }
+        if (m.busy) return;
+        m.busy = true; m.err = ''; m.msg = ''; m.found = []; m.picked = new Set(); render();
+        P.imageImport.scan(url).then(list => {
+          m.found = list;
+          m.picked = new Set(list.slice(0, IMP_MAX).map((_, i) => i));
+          m.msg = list.length ? 'Tìm thấy ' + list.length + ' ảnh. Bỏ tích ảnh không cần rồi bấm lấy (tối đa ' + IMP_MAX + ' ảnh mỗi lần).' : 'Không tìm thấy ảnh nào trong link này. Trang có thể chặn hoặc cần đăng nhập.';
+        }, e => { m.err = P.errText(e); }).then(() => { m.busy = false; render(); });
+        return;
+      }
+      case 'imp-all': ui.imp.picked = new Set(ui.imp.found.slice(0, IMP_MAX).map((_, i) => i)); render(); return;
+      case 'imp-none': ui.imp.picked = new Set(); render(); return;
+      case 'imp-save': {
+        const m = ui.imp;
+        const urls = m.found.filter((_, i) => m.picked.has(i));
+        if (!urls.length || m.busy) return;
+        m.busy = true; m.err = ''; render();
+        P.imageImport.save(urls, m.url.trim()).then(r => {
+          if (r.saved.length) {
+            ui.prod.images = ui.prod.images.concat(r.saved);
+            m.found = []; m.picked = new Set(); m.url = '';
+            m.msg = 'Đã thêm ' + r.saved.length + ' ảnh vào sản phẩm.' + (r.failed ? ' ' + r.failed + ' ảnh không lấy được' + (r.lastError ? ' (' + r.lastError + ')' : '') + '.' : '') + ' Nhớ bấm Lưu thay đổi.';
+          } else m.err = 'Không lấy được ảnh nào' + (r.lastError ? ': ' + r.lastError : '.');
+        }, e => { m.err = P.errText(e); }).then(() => { m.busy = false; render(); });
+        return;
+      }
       // Nhóm phân loại và SKU
       case 'g-custom': ui.gCustom = ''; render(); { const n = document.getElementById('g-custom-name'); if (n) n.focus(); } return;
       case 'g-custom-no': ui.gCustom = null; render(); return;
@@ -1583,6 +1636,7 @@
       const el = e.target;
       if (el.dataset && el.dataset.gopt != null) { e.preventDefault(); addCustomValue(+el.dataset.gopt); return; }
       if (el.dataset && el.dataset.gcustom) { e.preventDefault(); addCustomGroup(); return; }
+      if (el.dataset && el.dataset.imp === 'url') { e.preventDefault(); const b = document.querySelector('[data-act=imp-scan]'); if (b) b.click(); return; }
     }
     if (e.target.id === 'chat-input' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
@@ -1663,6 +1717,7 @@
       setErr('pf-variants', ''); return;
     }
     if (el.dataset.gcustom) { ui.gCustom = el.value; return; }
+    if (el.dataset.imp === 'url') { ui.imp.url = el.value; if (ui.imp.err) { ui.imp.err = ''; } return; }
     if (id === 'lg-kg') { ui.lKg = el.value; const out = document.getElementById('lg-out'); if (out) out.innerHTML = quoteRows(P.load()); return; }
     if (id === 'sh-kg') { updateShipQuote(); return; }
     if (el.dataset.lbind) { bindLogistic(el); if (id === 'lf-name') setErr('lf-name', ''); if (el.dataset.r) setErr('lf-rates', ''); return; }
@@ -1710,6 +1765,12 @@
     if (el.dataset.sku) {
       if (el.dataset.k === 'price' && el.value.trim() !== '') { const n = P.parseNum(el.value); if (n >= 0) el.value = fmt.num(n); }
       return;
+    }
+    if (el.classList.contains('imp-pick')) {
+      const i = +el.dataset.i;
+      if (el.checked && ui.imp.picked.size >= IMP_MAX) { el.checked = false; P.ui.toast('Mỗi lần lấy tối đa ' + IMP_MAX + ' ảnh.'); return; }
+      if (el.checked) ui.imp.picked.add(i); else ui.imp.picked.delete(i);
+      render(); return;
     }
     if (el.classList.contains('sku-cell') && ui.prod) {
       const x = ui.prod.skus.find(y => y.id === el.dataset.id);
@@ -2082,6 +2143,7 @@
     ui.lEdit = null; ui.lDraft = null; ui.lDel = null; ui.bulkAsk = false;
     ui.jEdit = null; ui.jDraft = null; ui.jDel = null; ui.oEdit = false;
     ui.feEdit = null; ui.feDraft = null; ui.feDel = null; ui.look = null; ui.libDel = null; ui.libEdit = null; ui.gCustom = null;
+    ui.imp = { open: false, url: '', busy: false, err: '', msg: '', found: [], picked: new Set() };
     if (route().view !== 'product') ui.prod = null;
     render();
     window.scrollTo(0, 0);

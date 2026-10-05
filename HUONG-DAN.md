@@ -69,6 +69,16 @@ Khóa `sb_publishable_...` được phép nằm trong mã web. Quyền thật do
 4. Authentication → Sign In / Providers: tắt **Allow new users to sign up** (shop không cần khách có tài khoản).
 5. Mở `admin.html`, đăng nhập. Lần đầu web tự tạo cài đặt và 4 danh mục.
 
+### Lấy ảnh từ link bài đăng
+
+Trong **Sản phẩm → sửa sản phẩm → Ảnh sản phẩm** có nút **Lấy ảnh từ link**. Dán link một bài đăng hoặc trang có ảnh, bấm Tìm ảnh, tích chọn ảnh cần lấy. Ảnh được tải về kho ảnh của shop, link nguồn không lưu ở đâu và khách không nhìn thấy.
+
+- Chạy bằng Edge Function `import-images` (mã ở `supabase/functions/import-images/`). Chỉ tài khoản admin gọi được, và chặn địa chỉ nội bộ.
+- Lấy được ảnh khi trang trả ảnh trong HTML: Pinterest, TikTok, web bán hàng thường, blog, báo. **Facebook, Instagram, Shopee** thường chặn hoặc chỉ hiện ảnh sau khi đăng nhập, khi đó dùng nút Thêm ảnh hoặc dán link ảnh trực tiếp.
+- Mỗi lần tối đa 12 ảnh, mỗi ảnh tối đa 5MB, định dạng JPG, PNG, WEBP.
+- Chỉ lấy ảnh bạn có quyền dùng.
+- Sửa hàm xong cần triển khai lại: Supabase → Edge Functions → import-images, hoặc nhờ Claude triển khai.
+
 ### Lưu ý
 
 - Gói miễn phí của Supabase tự **tạm dừng nếu 7 ngày không có truy cập**. Dự án bị dừng thì web báo "Chưa tải được cửa hàng". Vào dashboard bấm Restore là chạy lại, dữ liệu không mất.
