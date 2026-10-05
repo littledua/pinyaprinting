@@ -652,7 +652,7 @@
   }
 
   // Lấy ảnh từ link một bài đăng bất kỳ: máy chủ tìm ảnh, bạn tích chọn, ảnh được tải về kho của shop.
-  const IMP_MAX = 12;
+  const IMP_MAX = 40;
   function importBox() {
     const m = ui.imp;
     if (!P.imageImport.available()) {
@@ -1469,7 +1469,8 @@
         const urls = m.found.filter((_, i) => m.picked.has(i));
         if (!urls.length || m.busy) return;
         m.busy = true; m.err = ''; render();
-        P.imageImport.save(urls, P.imageImport.urlsIn(m.url)[0] || '').then(r => {
+        m.msg = 'Đang lấy 0/' + urls.length + ' ảnh…';
+        P.imageImport.save(urls, P.imageImport.urlsIn(m.url)[0] || '', (n, total) => { m.msg = 'Đang lấy ' + n + '/' + total + ' ảnh…'; const h = document.querySelector('.imp .hint'); if (h) h.textContent = m.msg; }).then(r => {
           if (r.saved.length) {
             ui.prod.images = ui.prod.images.concat(r.saved);
             m.found = []; m.picked = new Set(); m.url = '';

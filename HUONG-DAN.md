@@ -74,9 +74,10 @@ Khóa `sb_publishable_...` được phép nằm trong mã web. Quyền thật do
 Trong **Sản phẩm → sửa sản phẩm → Ảnh sản phẩm** có nút **Lấy ảnh từ link**. Dán link một bài đăng hoặc trang có ảnh, bấm Tìm ảnh, tích chọn ảnh cần lấy. Ảnh được tải về kho ảnh của shop, link nguồn không lưu ở đâu và khách không nhìn thấy.
 
 - Chạy bằng Edge Function `import-images` (mã ở `supabase/functions/import-images/`). Chỉ tài khoản admin gọi được, và chặn địa chỉ nội bộ.
-- Lấy được ảnh khi trang trả ảnh trong HTML: Pinterest, TikTok, web bán hàng thường, blog, báo. **Facebook, Instagram, Shopee, Xiaohongshu** thường chặn hoặc chỉ hiện ảnh sau khi đăng nhập, khi đó dùng nút Thêm ảnh hoặc dán link ảnh trực tiếp.
+- **Xiaohongshu (trang sản phẩm)**: lấy được cả ảnh chính và ảnh chi tiết, dán nguyên đoạn chia sẻ từ app là được. Web đọc từ địa chỉ dữ liệu công khai mà chính trang Xiaohongshu dùng; nếu Xiaohongshu đổi cách làm thì phần này có thể ngừng chạy.
+- Trang thường (Pinterest, TikTok, web bán hàng, blog, báo) lấy ảnh có trong trang. **Facebook, Instagram, Shopee, bài viết Xiaohongshu cần đăng nhập** thường không lấy được, khi đó dùng nút Thêm ảnh hoặc dán link ảnh trực tiếp.
 - Dán nguyên đoạn chia sẻ (có chữ và biểu tượng) cũng được, web tự tách link. Dán nhiều link một lúc (tối đa 6) thì web quét từng link rồi gộp ảnh.
-- Mỗi lần tối đa 12 ảnh, mỗi ảnh tối đa 5MB, định dạng JPG, PNG, WEBP.
+- Mỗi lần chọn tối đa 40 ảnh (web tự chia ra nhiều lượt 12 ảnh), mỗi ảnh tối đa 5MB, định dạng JPG, PNG, WEBP.
 - Chỉ lấy ảnh bạn có quyền dùng.
 - Sửa hàm xong cần triển khai lại: Supabase → Edge Functions → import-images, hoặc nhờ Claude triển khai.
 

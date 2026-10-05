@@ -154,3 +154,6 @@ export function sniffImage(bytes) {
       bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return { type: 'image/webp', ext: 'webp' };
   return null;
 }
+
+// Lấy các link trong một đoạn chữ dán vào (đoạn chia sẻ của app thường có chữ, biểu tượng, mã)
+export const urlsInText = (t) => [...new Set((String(t || '').match(/https?:\/\/[^\s<>"'“”‘’，。、）)【】]+/gi) || []).map((u) => u.replace(/[.,;:!?]+$/, '')))];

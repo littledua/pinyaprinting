@@ -1295,7 +1295,19 @@
       if (!uniq.length && firstErr) throw firstErr;
       return uniq;
     },
-    save: async (urls, referer) => { const r = await callImageFn({ action: 'import', urls, referer }); return { saved: r.saved || [], failed: r.failed || 0, lastError: r.lastError || '' }; }
+    // Máy chủ nhận tối đa 12 ảnh mỗi lượt: chia nhỏ, báo tiến độ qua onProgress(đã xong, tổng)
+    save: async (urls, referer, onProgress) => {
+      const out = { saved: [], failed: 0, lastError: '' };
+      for (let i = 0; i < urls.length; i += 12) {
+        const part = urls.slice(i, i + 12);
+        try {
+          const r = await callImageFn({ action: 'import', urls: part, referer });
+          out.saved.push(...(r.saved || [])); out.failed += r.failed || 0; if (r.lastError) out.lastError = r.lastError;
+        } catch (e) { out.failed += part.length; out.lastError = errText(e); }
+        if (onProgress) onProgress(Math.min(urls.length, i + 12), urls.length);
+      }
+      return out;
+    }
   };
 
   // Ảnh sản phẩm: lên kho ảnh của Supabase, trong sản phẩm chỉ lưu địa chỉ ảnh
