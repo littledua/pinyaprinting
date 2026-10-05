@@ -149,8 +149,7 @@
         <a href="#san-pham"${cur('products', 'product', 'library', 'categories')}>Quản lý sản phẩm</a>
         <a href="#xuong"${cur('factories')}>Xưởng</a>
         <a href="#logistics"${cur('logistics')}>Logistics</a>
-        <a href="#giao-dien"${cur('look')}>Giao diện</a>
-        <a href="#cai-dat"${cur('settings')}>Cài đặt</a>
+        <a href="#cai-dat"${cur('settings', 'look')}>Cài đặt</a>
       </nav>
       <div class="side-foot">
         <div class="side-user"><span class="avatar" aria-hidden="true">${P.logoSrc() ? `<img src="${esc(P.logoSrc())}" alt="">` : esc((s.adminName || 'A').trim().split(/\s+/).pop().charAt(0).toUpperCase())}</span>
@@ -1216,7 +1215,7 @@
     const showBox = (k, label) => `<label class="check"><input type="checkbox" data-nokeep="1" data-lshow="${k}"${l.show[k] !== false ? ' checked' : ''}>${esc(label)}</label>`;
     const catBox = c => `<label class="check"><input type="checkbox" data-nokeep="1" data-lcat="${esc(c.id)}"${l.hiddenCats.includes(c.id) ? '' : ' checked'}>${esc(c.name)}</label>`;
     const fonts = Object.keys(P.FONTS).map(k => `<option value="${k}"${l.font === k ? ' selected' : ''}>${esc(P.FONTS[k].name)}</option>`).join('');
-    return `<div class="page-head"><div><h1>Giao diện</h1><p>Chỉnh màu, font, cỡ chữ và các mục hiện trên web. Trang này xem thử ngay, bấm Lưu mới áp dụng cho khách.</p></div>
+    return `${settingsTabs('look')}<div class="page-head"><div><h1>Giao diện</h1><p>Chỉnh màu, font, cỡ chữ và các mục hiện trên web. Trang này xem thử ngay, bấm Lưu mới áp dụng cho khách.</p></div>
         <a class="btn btn-ghost btn-sm" href="index.html" target="_blank" rel="noopener">Xem cửa hàng</a></div>
       <form id="look-form" class="panel" novalidate>
         <h2 class="sec-title">Ảnh đại diện</h2>
@@ -1272,6 +1271,12 @@
       <p class="hint" style="margin-top:14px">Nhóm gõ tay ngay trong từng sản phẩm thì không vào đây. Xóa một lựa chọn hoặc cả nhóm ở đây không làm mất lựa chọn sản phẩm đã chọn.</p>`;
   }
 
+  // ==== Cài đặt: Cửa hàng · Giao diện ====
+  function settingsTabs(view) {
+    const tabs = [['settings', '#cai-dat', 'Cửa hàng'], ['look', '#giao-dien', 'Giao diện']];
+    return `<nav class="subtabs" aria-label="Cài đặt">${tabs.map(([v, href, label]) => `<a href="${href}"${v === view ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>`;
+  }
+
   // ==== Cài đặt ====
   function viewSettings(db) {
     const s = db.settings;
@@ -1279,7 +1284,7 @@
       `<div class="field${full ? ' full' : ''}"><label for="${id}">${label}</label><input id="${id}" value="${esc(value)}" autocomplete="off"${extra || ''} aria-describedby="err-${id}"><p class="err" id="err-${id}"></p></div>`;
     const demoCount = db.products.filter(p => p.demo).length + db.orders.filter(o => o.demo).length;
     const ask = ui.dataAsk;
-    return `<div class="page-head"><div><h1>Cài đặt</h1><p>Thông tin cửa hàng hiện ở trang Giới thiệu, Liên hệ và chân trang.</p></div>
+    return `${settingsTabs('settings')}<div class="page-head"><div><h1>Cài đặt</h1><p>Thông tin cửa hàng hiện ở trang Giới thiệu, Liên hệ và chân trang.</p></div>
         <a class="btn btn-ghost btn-sm" href="index.html">Xem cửa hàng</a></div>
       <form id="s-form" class="panel" novalidate>
         <h2 class="sec-title">Cửa hàng</h2>
