@@ -131,7 +131,7 @@ p{margin:0}
 .link-btn:hover{color:var(--ink)}
 
 /* Logo: dấu chồng màu (registration mark) bo tròn */
-.brand{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-family:var(--font-display);font-weight:700;font-size:1.35rem;letter-spacing:.01em;white-space:nowrap}
+.brand{display:inline-flex;align-items:center;flex-shrink:0;gap:10px;text-decoration:none;color:var(--ink);font-family:var(--font-display);font-weight:700;font-size:1.35rem;letter-spacing:.01em;white-space:nowrap}
 .brand-word{display:inline-flex;align-items:baseline;gap:.3em}
 .brand-word small{font-family:var(--font-body);font-weight:700;font-size:.56em;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text)}
 .reg{width:28px;height:28px;flex:none}
@@ -190,7 +190,7 @@ p{margin:0}
 }
 
 /* Logo shop (assets/logo.png) */
-.brand-logo{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 0 0 2px var(--sheet),0 0 0 3.5px var(--sky)}
+.brand-logo{width:40px;height:40px;min-width:40px;max-width:none;aspect-ratio:1;border-radius:50%;object-fit:cover;flex:0 0 40px;box-shadow:0 0 0 2px var(--sheet),0 0 0 3.5px var(--sky)}
 /* Điện thoại: giữ trang cố định khi chạm vào ô nhập.
    Trình duyệt iPhone tự phóng to nếu chữ trong ô nhập nhỏ hơn 16px, nên ép tối thiểu 16px (vẫn theo cỡ chữ lớn hơn nếu shop chọn). */
 html{touch-action:manipulation}
