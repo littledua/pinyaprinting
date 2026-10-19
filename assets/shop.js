@@ -6,7 +6,9 @@
   const root = document.getElementById('shop');
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const ui = { sort: 'new', sel: null, confirm: null, trackErr: '', busy: false };
+  const MAXQ = 99999;
+  const clampQ = (q, min) => Math.min(MAXQ, Math.max(min || 1, q || 0));
+  const ui = { q: '', sort: 'new', sel: null, confirm: null, trackErr: '', busy: false };
   let lastRoute = '';
   let booted = false;
   const reading = new Set(); // đơn đang gửi yêu cầu "đã đọc", tránh gửi lặp
@@ -27,6 +29,7 @@
     clock: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
     pin: svg('<path d="M12 21s7-6 7-12a7 7 0 0 0-14 0c0 6 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/>'),
     link: svg('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
+    search: svg('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>'),
     check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
     folder: svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>')
   };
@@ -49,10 +52,11 @@
     if (h === 'thanh-toan') return { view: 'pay' };
     if (h === 'theo-doi') return { view: 'track' };
     if (h === 'lien-he') return { view: 'contact' };
+    if (h === 'tim-kiem') return { view: 'search' };
     return { view: 'about' };
   }
   function go(hash) {
-    if (location.hash === '#' + hash) { render(); window.scrollTo(0, 0); } else location.hash = hash;
+    if (location.hash === '#' + hash) { render(); window.scrollTo({ top: 0, behavior: 'instant' }); } else location.hash = hash;
   }
 
   // Giữ chữ đang gõ trong các ô tự do khi trang vẽ lại
@@ -106,6 +110,7 @@
       case 'track': body = viewTrack(db); title = 'Theo dõi tiến độ in'; break;
       case 'order': body = viewOrder(db, r.id); title = 'Đơn ' + r.id; break;
       case 'contact': body = viewContact(db); title = 'Liên hệ'; break;
+      case 'search': body = viewSearch(db); title = 'Tìm sản phẩm'; break;
       default: body = viewAbout(db);
     }
     root.innerHTML = header(db, r) + '<main id="main">' + body + '</main>' + footer(db);
@@ -133,6 +138,7 @@
         ${P.showSection(db, 'navContact') ? `<a href="#lien-he"${cur(r.view === 'contact')}>Liên hệ</a>` : ''}
       </nav>
       <div class="sh-tools">
+        <a class="sh-search" href="#tim-kiem" aria-label="Tìm sản phẩm"${cur(r.view === 'search')}>${ICON.search}</a>
         ${P.showSection(db, 'navTrack') ? `<a class="sh-track" href="#theo-doi"${cur(r.view === 'track' || r.view === 'order')}>${ICON.track}<span>Theo dõi đơn</span></a>` : ''}
         <a class="cart-btn" href="#gio-hang" aria-label="Giỏ hàng${n ? ', ' + n + ' sản phẩm' : ''}"${cur(['cart', 'file', 'pay'].includes(r.view))}>${ICON.bag}${n ? `<span class="count">${n}</span>` : ''}</a>
       </div>
@@ -191,6 +197,33 @@
           return `<a class="cat-card" data-ink="${esc(c.ink)}" href="#dm-${esc(c.id)}"><span class="blob"></span><h3>${esc(c.name)}</h3>${c.desc ? `<p>${esc(c.desc)}</p>` : ''}<span class="cnt">${n ? n + ' sản phẩm' : 'Sắp có sản phẩm'} →</span></a>`;
         }).join('')}</div>` : '<div class="panel empty"><p>Shop đang cập nhật danh mục.</p></div>'}
       </section>`}`;
+  }
+
+  // ==== Tìm sản phẩm ====
+  const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').replace(/×/g, 'x').toLowerCase();
+  function searchHits(db, q) {
+    const words = fold(q).split(/\s+/).filter(Boolean);
+    if (!words.length) return null;
+    return db.products.filter(p => p.active && p.variants.length && P.catVisible(db, p.catId)).filter(p => {
+      const c = P.findCategory(db, p.catId);
+      const hay = fold([p.name, p.desc, c && c.name].concat(p.variants.map(v => v.name)).join(' '));
+      return words.every(w => hay.includes(w));
+    });
+  }
+  function searchResults(db, q) {
+    const hits = searchHits(db, q);
+    if (hits === null) return '<p class="muted">Gõ tên sản phẩm, loại hoặc kích thước, ví dụ “hộp giấy”, “móc khóa”.</p>';
+    if (!hits.length) return `<div class="panel empty"><h3>Không thấy sản phẩm phù hợp</h3><p>Thử từ khóa ngắn hơn, hoặc chọn từ danh mục.</p><a class="btn btn-ghost btn-sm" href="#lien-he">Nhắn shop để được tư vấn</a></div>`;
+    return `<p class="muted" style="margin-bottom:12px" aria-live="polite">${hits.length} sản phẩm</p><div class="pgrid">${hits.map(p => pcard(db, p)).join('')}</div>`;
+  }
+  function viewSearch(db) {
+    return `<div class="wrap page">
+      <div class="page-head"><div><h1>Tìm sản phẩm</h1></div></div>
+      <form class="search-bar" id="search-form" role="search" data-keep>
+        <label class="sr-only" for="shop-q">Tên sản phẩm</label>
+        <input id="shop-q" class="search" type="search" enterkeyhint="search" autocomplete="off" placeholder="Tìm theo tên, loại, kích thước…" value="${esc(ui.q)}">
+      </form>
+      <div id="search-out">${searchResults(db, ui.q)}</div></div>`;
   }
 
   // ==== Danh mục ====
@@ -328,7 +361,8 @@
           <p class="hint" style="margin-top:12px">${esc(payRule(db.settings))}</p>
           <div class="actions"><a class="btn btn-cta" href="#gui-file" style="width:100%">Tiếp tục: gửi file</a></div>
         </aside>
-      </div></div>`;
+      </div></div>
+      <div class="buy-bar"><div><small>Tạm tính</small><b id="sum-total2">${fmt.vnd(sub)}</b></div><a class="btn btn-cta" href="#gui-file">Tiếp tục: gửi file</a></div>`;
   }
 
   function viewFile(db) {
@@ -411,7 +445,8 @@
           <div class="actions"><button class="btn btn-cta" type="submit" form="checkout" style="width:100%">Đặt hàng</button></div>
           <p class="hint" style="margin-top:10px">Đặt xong, trang hiện số tài khoản để bạn chuyển khoản.</p>
         </aside>
-      </div></div>`;
+      </div></div>
+      <div class="buy-bar"><div><small>Chuyển khoản ngay</small><b id="pay-now2">${fmt.vnd(chosen.amount)}</b></div><button class="btn btn-cta" type="submit" form="checkout">Đặt hàng</button></div>`;
   }
 
   function refreshCartNumbers() {
@@ -419,13 +454,15 @@
     lines.forEach((l, i) => { const el = document.getElementById('ct-' + i); if (el) el.textContent = fmt.vnd(l.line); });
     const el = document.getElementById('sum-total');
     if (el) el.textContent = fmt.vnd(lines.reduce((a, l) => a + l.line, 0));
+    const b2 = document.getElementById('sum-total2');
+    if (b2) b2.textContent = fmt.vnd(lines.reduce((a, l) => a + l.line, 0));
   }
 
   function cartEdit(fn) {
     const lines = P.cartLines(P.load());
     const c = lines.map(l => ({ pid: l.pid, vid: l.vid, qty: l.qty, min: +l.variant.minQty || 1 }));
     fn(c);
-    P.setCart(c.filter(Boolean).map(x => ({ pid: x.pid, vid: x.vid, qty: Math.max(x.min, x.qty) })));
+    P.setCart(c.filter(Boolean).map(x => ({ pid: x.pid, vid: x.vid, qty: clampQ(x.qty, x.min) })));
     render();
   }
 
@@ -681,7 +718,7 @@
     const { v } = currentVariant();
     if (!v) return false;
     const min = +v.minQty || 1;
-    if (ui.sel.qty < min) ui.sel.qty = min;
+    ui.sel.qty = clampQ(ui.sel.qty, min);
     P.addToCart(ui.sel.pid, ui.sel.vid, ui.sel.qty);
     return true;
   }
@@ -720,13 +757,13 @@
         const { v } = currentVariant();
         const min = v ? (+v.minQty || 1) : 1;
         const step = min >= 50 ? 10 : 1;
-        ui.sel.qty = Math.max(min, ui.sel.qty + (a === 'qty+' ? step : -step));
+        ui.sel.qty = clampQ(ui.sel.qty + (a === 'qty+' ? step : -step), min);
         render(); return;
       }
       case 'add': if (addSelected()) { P.ui.toast('Đã thêm vào giỏ hàng.'); render(); } return;
       case 'buy': if (addSelected()) go('gio-hang'); return;
       case 'cq-': case 'cq+':
-        cartEdit(c => { const x = c[i]; if (x) x.qty += (a === 'cq+' ? 1 : -1) * (x.min >= 50 ? 10 : 1); }); return;
+        cartEdit(c => { const x = c[i]; if (x) x.qty = clampQ(x.qty + (a === 'cq+' ? 1 : -1) * (x.min >= 50 ? 10 : 1), x.min); }); return;
       case 'rm': cartEdit(c => { c[i] = null; }); P.ui.toast('Đã xóa khỏi giỏ hàng.'); return;
       case 'track-clear': P.setTrack(''); ui.trackErr = ''; go('theo-doi'); return;
       case 'cancel-ask': ui.confirm = route().id; render(); return;
@@ -755,7 +792,13 @@
       ui.sel.qty = parseInt(el.value.replace(/\D/g, ''), 10) || 0;
       const { v } = currentVariant();
       const out = document.getElementById('pq-total');
-      if (v && out) out.textContent = 'Thành tiền ' + fmt.vnd(v.price * ui.sel.qty);
+      if (v && out) out.textContent = 'Thành tiền ' + fmt.vnd(v.price * clampQ(ui.sel.qty, 1));
+      return;
+    }
+    if (el.id === 'shop-q') {
+      ui.q = el.value;
+      const out = document.getElementById('search-out');
+      if (out) out.innerHTML = searchResults(P.load(), ui.q);
       return;
     }
     if (el.id && document.getElementById('err-' + el.id) && document.getElementById('err-' + el.id).textContent) setErr(el.id, '');
@@ -767,7 +810,7 @@
     // Ô số lượng: sửa ngay trong ô, không vẽ lại trang (để cú bấm nút kế tiếp không bị mất)
     if (el.id === 'pq') {
       const { v } = currentVariant();
-      ui.sel.qty = Math.max(v ? (+v.minQty || 1) : 1, ui.sel.qty || 0);
+      ui.sel.qty = clampQ(ui.sel.qty, v ? (+v.minQty || 1) : 1);
       el.value = ui.sel.qty;
       const out = document.getElementById('pq-total');
       if (v && out) out.textContent = 'Thành tiền ' + fmt.vnd(v.price * ui.sel.qty);
@@ -778,7 +821,7 @@
       const q = parseInt(el.value.replace(/\D/g, ''), 10) || 0;
       const lines = P.cartLines(P.load());
       const c = lines.map(l => ({ pid: l.pid, vid: l.vid, qty: l.qty }));
-      if (c[i]) { c[i].qty = Math.max(+lines[i].variant.minQty || 1, q); el.value = c[i].qty; }
+      if (c[i]) { c[i].qty = clampQ(q, +lines[i].variant.minQty || 1); el.value = c[i].qty; }
       P.setCart(c);
       refreshCartNumbers();
       return;
@@ -792,6 +835,7 @@
       patchCo({ payPct: o.pct });
       document.getElementById('pay-label').textContent = o.label;
       document.getElementById('pay-now').textContent = fmt.vnd(o.amount);
+      const pn2 = document.getElementById('pay-now2'); if (pn2) pn2.textContent = fmt.vnd(o.amount);
       document.getElementById('pay-later').textContent = fmt.vnd(sub - o.amount);
     }
   });
@@ -824,6 +868,8 @@
       }, e => { P.setTrack(''); ui.trackErr = P.errText(e); }).then(() => { ui.busy = false; lastRoute = ''; render(); });
       return;
     }
+
+    if (f.id === 'search-form') { const i = document.getElementById('shop-q'); if (i) i.blur(); return; }
 
     if (f.id === 'chat-form') {
       const inp = document.getElementById('chat-input');
@@ -885,10 +931,18 @@
     }
   });
 
+  // Chuyển trang thì lên đầu ngay (không cuộn mượt); bấm Back thì về đúng chỗ đang xem
+  const seenY = {};
+  let curHash = location.hash, popped = false;
+  window.addEventListener('scroll', () => { seenY[curHash] = window.scrollY; }, { passive: true });
+  window.addEventListener('popstate', () => { popped = true; });
   window.addEventListener('hashchange', () => {
     ui.confirm = null;
+    curHash = location.hash;
     render();
-    window.scrollTo(0, 0);
+    const y = popped && seenY[curHash] ? seenY[curHash] : 0;
+    popped = false;
+    window.scrollTo({ top: y, behavior: 'instant' });
   });
   P.loadLogo(() => render());
   P.onChange(() => render());

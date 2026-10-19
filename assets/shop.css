@@ -193,3 +193,32 @@
 @media (max-width:760px){.foot-grid{grid-template-columns:1fr}}
 
 .hero-logo img{display:block;width:100%;aspect-ratio:1;object-fit:cover;border-radius:32px;box-shadow:var(--shadow)}
+/* Tìm kiếm */
+.sh-search{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;border:1.5px solid var(--sky);color:var(--ink);text-decoration:none}
+.sh-search:hover,.sh-search[aria-current="page"]{background:var(--sky-soft)}
+.sh-search svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.search-bar{margin-bottom:18px}
+.search-bar input{width:100%}
+
+/* Thanh chốt đơn dính đáy trên điện thoại */
+.buy-bar{display:none}
+@media (max-width:760px){
+  .buy-bar{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));background:var(--sheet);border-top:1px solid var(--rule);box-shadow:0 -6px 18px rgba(0,0,0,.06)}
+  .buy-bar small{display:block;color:var(--ink-soft);font-size:.78rem;font-weight:700}
+  .buy-bar b{font:700 1.15rem/1.2 var(--font-display);font-variant-numeric:tabular-nums}
+  .buy-bar .btn{flex:none;padding-inline:22px}
+  .summary .actions{display:none}
+  .co-steps{flex-wrap:nowrap;gap:6px}
+  .co-steps li{flex:1 1 0;min-width:0}
+  .co-steps a,.co-steps li:not(.done){padding:8px 6px;gap:4px;font-size:.76rem;justify-content:center;white-space:nowrap}
+  .co-steps b{width:18px;height:18px;font-size:.68rem}
+  .sh-row .brand{min-width:0;flex-shrink:1;font-size:clamp(1rem,4.6vw,1.35rem)}
+  .sh-row .brand-word{overflow:hidden;text-overflow:ellipsis}
+  .sh-tools{gap:6px}
+  body:has(.buy-bar) .toast{bottom:92px}
+  .sh-nav{padding-right:32px;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent)}
+  .foot-list{gap:0}
+  .foot-list a{display:block;padding:10px 0}
+  .crumbs a{display:inline-block;padding:8px 0}
+}
+@media (max-width:760px){.wrap.page:has(+ .buy-bar){padding-bottom:96px}}
