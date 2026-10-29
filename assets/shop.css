@@ -294,10 +294,12 @@
 @media (max-width:760px){.wrap.page:has(+ .buy-bar){padding-bottom:96px}}
 
 /* ==== Chuyển khoản: mã QR VietQR + thông tin ==== */
-.pay-qr{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px 22px;align-items:center;margin-top:16px}
+.pay-qr{display:grid;grid-template-columns:232px minmax(0,1fr);gap:18px 24px;align-items:center;margin-top:16px}
+.pay-qr .kv{margin:0;min-width:0}
+.pay-qr .kv dd{min-width:0;overflow-wrap:anywhere}
 .pay-qr.no-qr{grid-template-columns:1fr}
-.qr-box{position:relative;margin:0;display:grid;justify-items:center;gap:8px;padding:12px;border-radius:20px;background:#fff;border:2px solid color-mix(in srgb,var(--pop) 70%,transparent);width:min(100%,232px)}
+.qr-box{position:relative;margin:0;display:grid;justify-items:center;gap:8px;padding:12px;border-radius:20px;background:#fff;border:2px solid color-mix(in srgb,var(--pop) 70%,transparent);width:100%;max-width:232px;min-width:0}
 .qr-box img{display:block;width:200px;height:auto;max-width:100%;aspect-ratio:1;object-fit:contain}
 .qr-box figcaption{font-size:.78rem;color:#5E768C;text-align:center;line-height:1.35}
 .qr-tag{position:absolute;top:-11px;left:50%;transform:translateX(-50%);white-space:nowrap;background:var(--pop);color:var(--on-pop);font:700 .72rem/1 var(--font-body);padding:5px 10px;border-radius:999px}
-@media (max-width:560px){.pay-qr{grid-template-columns:1fr}.qr-box{justify-self:center}}
+@media (max-width:620px){.pay-qr{grid-template-columns:minmax(0,1fr)}.qr-box{justify-self:center}}
