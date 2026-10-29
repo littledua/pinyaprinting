@@ -20,11 +20,12 @@
     confirm: null, draft: { id: null, images: [] },
     prod: null, prodDel: false,
     cEdit: null, cDel: null, fEdit: null, dataAsk: null,
-    look: null,
+    look: null, drawer: false, navOpen: new Set(),
     feEdit: null, feDraft: null, feDel: null,
     gCustom: null, libDel: null, libEdit: null, joq: '', npq: '',
     imp: { open: false, url: '', busy: false, err: '', msg: '', found: [], picked: new Set() }
   };
+  try { JSON.parse(localStorage.getItem('pinya-nav') || '[]').forEach(k => ui.navOpen.add(k)); } catch (e) {}
   let lastRoute = '';
 
   const REG = '<svg class="reg" viewBox="0 0 32 32" aria-hidden="true"><circle class="ln" cx="16" cy="16" r="10"/><circle class="dot" cx="16" cy="16" r="4.5"/><path class="ln" d="M16 1v30M1 16h30"/></svg>';
@@ -129,55 +130,94 @@
       case 'library': body = viewLibrary(db); break;
       default: body = viewOverview(db);
     }
-    app.innerHTML = `<div class="adm">${side(db, r.view)}<main class="adm-main" id="main">${body}</main></div>`;
+    app.innerHTML = `<div class="adm${ui.drawer ? ' drawer-on' : ''}">${side(db, r.view)}<main class="adm-main" id="main">${body}</main></div>`;
+    document.documentElement.classList.toggle('lock', !!ui.drawer);
     document.title = 'Quản trị · ' + db.settings.shopName;
     if (keep) restore(keep);
     const thread = document.getElementById('thread');
     if (thread) thread.scrollTop = thread.scrollHeight;
   }
 
+  // Menu kiểu Tiệm Dứa: máy tính là thanh bên cố định, điện thoại là ngăn kéo trượt từ trái (nút ☰ ở thanh trên).
+  const NI = d => `<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const NAV_ICON = {
+    overview: NI('<rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/>'),
+    orders: NI('<path d="M6 3h12l2 4v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7z"/><path d="M4 7h16M9 11h6"/>'),
+    jobs: NI('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>'),
+    products: NI('<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>'),
+    factories: NI('<path d="M3 21V10l6 4V10l6 4V6l6 4v11z"/><path d="M3 21h18"/>'),
+    logistics: NI('<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'),
+    settings: NI('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
+    menu: NI('<path d="M4 7h16M4 12h16M4 17h16"/>'),
+    close: NI('<path d="M6 6l12 12M18 6L6 18"/>'),
+    store: NI('<path d="M4 10v10h16V10"/><path d="M3 4h18l-1.5 6h-15z"/><path d="M10 20v-5h4v5"/>'),
+    chev: NI('<path d="M6 9l6 6 6-6"/>')
+  };
+  const NAV = [
+    ['overview', '#tong-quan', 'Tổng quan', ['overview']],
+    ['orders', '#don-hang', 'Đơn hàng', ['orders', 'order']],
+    ['jobs', '#don-in', 'Đơn in', ['jobs']],
+    ['products', '#san-pham', 'Sản phẩm', ['products', 'product', 'library', 'categories'], [['#san-pham', 'Danh sách sản phẩm', ['products', 'product']], ['#thu-vien', 'Phân loại', ['library']], ['#danh-muc', 'Danh mục', ['categories']]]],
+    ['factories', '#xuong', 'Xưởng', ['factories']],
+    ['logistics', '#logistics', 'Logistics', ['logistics']],
+    ['settings', '#cai-dat', 'Cài đặt', ['settings', 'look'], [['#cai-dat', 'Cửa hàng', ['settings']], ['#giao-dien', 'Giao diện', ['look']]]]
+  ];
+  const navTitle = view => {
+    for (const n of NAV) {
+      if (n[4]) { const c = n[4].find(x => x[2].includes(view)); if (c) return c[1] === 'Danh sách sản phẩm' ? 'Sản phẩm' : c[1]; }
+      if (n[3].includes(view)) return n[2];
+    }
+    return 'Quản trị';
+  };
   function side(db, view) {
     const todo = db.orders.filter(o => P.adminNeeds(o, db).length).length;
-    const cur = (...v) => v.includes(view) ? ' aria-current="page"' : '';
     const s = db.settings;
-    return `<aside class="side">
-      <a class="brand" href="#tong-quan" aria-label="${esc(s.shopName)}, tổng quan">${P.brandMark()}<span class="brand-word">${esc(s.shopName)}</span></a>
-      <p class="side-tag">Quản trị</p>
-      <nav class="side-nav" aria-label="Quản trị">
-        <a href="#tong-quan"${cur('overview')}>Tổng quan</a>
-        <a href="#don-hang"${cur('orders', 'order')}>Đơn hàng${todo ? ` <span class="count" aria-label="${todo} đơn cần xử lý">${todo}</span>` : ''}</a>
-        <a href="#don-in"${cur('jobs')}>Đơn in</a>
-        <a href="#san-pham"${cur('products', 'product', 'library', 'categories')}>Quản lý sản phẩm</a>
-        <a href="#xuong"${cur('factories')}>Xưởng</a>
-        <a href="#logistics"${cur('logistics')}>Logistics</a>
-        <a href="#cai-dat"${cur('settings', 'look')}>Cài đặt</a>
-      </nav>
-      <div class="side-foot">
-        <div class="side-user"><span class="avatar" aria-hidden="true">${P.logoSrc() ? `<img src="${esc(P.logoSrc())}" alt="">` : esc((s.adminName || 'A').trim().split(/\s+/).pop().charAt(0).toUpperCase())}</span>
-          <div><b>${esc(s.adminName)}</b><small>${esc(s.adminEmail)}</small></div></div>
-        ${P.isCloud ? `<p class="sync" id="sync-state" data-s="${P.syncState()}" aria-live="polite">${SYNC_TEXT[P.syncState()] || ''}</p>` : ''}
-        <a href="index.html">Xem cửa hàng</a>
-        <button class="link-btn" type="button" data-act="logout" style="justify-self:start;padding-left:0">Đăng xuất</button>
-      </div>
-    </aside>`;
+    const items = NAV.map(([k, href, label, views, kids]) => {
+      const on = views.includes(view);
+      const open = kids && (on || ui.navOpen.has(k));
+      const badge = k === 'orders' && todo ? `<span class="nav-badge" aria-label="${todo} đơn cần xử lý">${todo} mới</span>` : '';
+      const row = `<a class="nav-it${on ? ' on' : ''}" href="${href}"${on && !kids ? ' aria-current="page"' : ''}>${NAV_ICON[k]}<span>${label}</span>${badge}</a>`;
+      if (!kids) return `<li>${row}</li>`;
+      return `<li class="nav-grp"><div class="nav-row">${row}<button class="nav-chev" type="button" data-act="nav-toggle" data-k="${k}" aria-expanded="${!!open}" aria-label="${open ? 'Thu gọn' : 'Mở'} ${label}">${NAV_ICON.chev}</button></div>
+        ${open ? `<ul class="nav-kids">${kids.map(([h, l, vs]) => `<li><a href="${h}"${vs.includes(view) ? ' aria-current="page"' : ''}>${l}</a></li>`).join('')}</ul>` : ''}</li>`;
+    }).join('');
+    const avatar = P.logoSrc() ? `<img src="${esc(P.logoSrc())}" alt="">` : esc((s.adminName || 'A').trim().split(/\s+/).pop().charAt(0).toUpperCase());
+    return `<header class="adm-top">
+        <button class="adm-burger" type="button" data-act="drawer" aria-expanded="${!!ui.drawer}" aria-controls="side" aria-label="Mở menu">${NAV_ICON.menu}</button>
+        <b class="adm-title">${esc(navTitle(view))}</b>
+        <a class="pill-link" href="index.html">${NAV_ICON.store}<span>Cửa hàng</span></a>
+      </header>
+      <div class="scrim" data-act="drawer-close"${ui.drawer ? '' : ' hidden'}></div>
+      <aside class="side${ui.drawer ? ' open' : ''}" id="side" aria-label="Menu quản trị">
+        <div class="side-brand"><a class="brand" href="#tong-quan" aria-label="${esc(s.shopName)}, tổng quan">${P.brandMark()}<span class="brand-word"><b>${esc(s.shopName)}</b><small>Quản trị</small></span></a>
+          <button class="side-x" type="button" data-act="drawer-close" aria-label="Đóng menu">${NAV_ICON.close}</button></div>
+        <nav class="side-nav" aria-label="Quản trị"><ul>${items}</ul></nav>
+        <div class="side-foot">
+          <div class="side-user"><span class="avatar" aria-hidden="true">${avatar}</span><div><b>${esc(s.adminName)}</b><small>${esc(s.adminEmail)}</small></div></div>
+          ${P.isCloud ? `<p class="sync" id="sync-state" data-s="${P.syncState()}" aria-live="polite">${SYNC_TEXT[P.syncState()] || ''}</p>` : ''}
+          <div class="side-acts"><a class="pill-link" href="index.html">${NAV_ICON.store}<span>Xem cửa hàng</span></a><button class="pill-link out" type="button" data-act="logout">Đăng xuất</button></div>
+        </div>
+      </aside>`;
   }
 
   // ==== Đăng nhập ====
   function viewLogin(db) {
-    return `<div class="login"><div class="login-card">
-      <a class="brand" href="index.html">${P.brandMark()}<span class="brand-word">${esc(db.settings.shopName)}</span></a>
-      <h1>Đăng nhập quản trị</h1>
-      <form id="login-form" novalidate>
-        <div class="field"><label for="al-email">Email</label>
-          <input id="al-email" type="email" autocomplete="username" aria-describedby="err-al-email"><p class="err" id="err-al-email"></p></div>
-        <div class="field"><label for="al-pass">Mật khẩu</label>
-          <input id="al-pass" type="password" autocomplete="current-password" aria-describedby="err-al-pass"><p class="err" id="err-al-pass"></p></div>
-        <button class="btn btn-cta" type="submit">Đăng nhập</button>
-      </form>
-      ${P.isCloud ? '' : `<div class="login-alt"><span>Bản chạy thử: email <b>${esc(db.settings.adminEmail)}</b>, mật khẩu <b>demo</b>. Chưa nối máy chủ nên đăng nhập chỉ là giả lập.</span>
-        <button class="btn btn-quiet btn-sm" type="button" data-act="fill-demo">Điền tài khoản mẫu</button></div>`}
-      <div class="login-foot"><a href="index.html">← Về cửa hàng</a></div>
-    </div></div>`;
+    const s = db.settings;
+    const logo = P.logoSrc() ? `<img class="login-logo" src="${esc(P.logoSrc())}" alt="">` : `<span class="login-logo ph">${P.brandMark()}</span>`;
+    return `<div class="login"><div class="login-wrap"><a class="login-back" href="index.html">← Về cửa hàng</a>
+      <div class="login-card">
+        <div class="login-head">${logo}<h1>Đăng nhập quản trị</h1><p>${esc(s.shopName)} · trang quản lý</p></div>
+        <form id="login-form" novalidate>
+          <div class="field"><label for="al-email">Email</label>
+            <div class="in-ic">${NI('<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M4 7l8 6 8-6"/>')}<input id="al-email" type="email" autocomplete="username" placeholder="email@vidu.com" aria-describedby="err-al-email"></div><p class="err" id="err-al-email"></p></div>
+          <div class="field"><label for="al-pass">Mật khẩu</label>
+            <div class="in-ic">${NI('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>')}<input id="al-pass" type="password" autocomplete="current-password" placeholder="••••••••" aria-describedby="err-al-pass">
+              <button class="eye" type="button" data-act="pass-eye" aria-label="Hiện mật khẩu" aria-pressed="false">${NI('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>')}</button></div><p class="err" id="err-al-pass"></p></div>
+          <button class="btn btn-cta" type="submit">Đăng nhập</button>
+        </form>
+        ${P.isCloud ? '' : `<div class="login-alt"><span>Bản chạy thử: email <b>${esc(s.adminEmail)}</b>, mật khẩu <b>demo</b>. Chưa nối máy chủ nên đăng nhập chỉ là giả lập.</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-act="fill-demo">Điền tài khoản mẫu</button></div>`}
+      </div></div></div>`;
   }
 
   // ==== Tổng quan ====
@@ -547,7 +587,8 @@
   }
 
   // ==== Quản lý sản phẩm: Sản phẩm · Phân loại · Danh mục ====
-  function manageTabs(view) {
+  function manageTabs() { return ''; }
+  function manageTabsOld(view) {
     const tabs = [['products', '#san-pham', 'Sản phẩm'], ['library', '#thu-vien', 'Phân loại'], ['categories', '#danh-muc', 'Danh mục']];
     return `<nav class="subtabs" aria-label="Quản lý sản phẩm">${tabs.map(([v, href, label]) => `<a href="${href}"${v === view ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>`;
   }
@@ -1314,7 +1355,8 @@
   }
 
   // ==== Cài đặt: Cửa hàng · Giao diện ====
-  function settingsTabs(view) {
+  function settingsTabs() { return ''; }
+  function settingsTabsOld(view) {
     const tabs = [['settings', '#cai-dat', 'Cửa hàng'], ['look', '#giao-dien', 'Giao diện']];
     return `<nav class="subtabs" aria-label="Cài đặt">${tabs.map(([v, href, label]) => `<a href="${href}"${v === view ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>`;
   }
@@ -1433,6 +1475,10 @@
     const db = P.load();
     const i = +t.dataset.i;
     switch (a) {
+      case 'drawer': ui.drawer = true; render(); { const x = app.querySelector('.side-x'); if (x) x.focus(); } return;
+      case 'drawer-close': ui.drawer = false; render(); { const bg = app.querySelector('.adm-burger'); if (bg) bg.focus(); } return;
+      case 'nav-toggle': { const k = t.dataset.k; if (ui.navOpen.has(k)) ui.navOpen.delete(k); else ui.navOpen.add(k); try { localStorage.setItem('pinya-nav', JSON.stringify([...ui.navOpen])); } catch (e) {} render(); return; }
+      case 'pass-eye': { const inp = document.getElementById('al-pass'); const on = inp.type === 'password'; inp.type = on ? 'text' : 'password'; t.setAttribute('aria-pressed', String(on)); t.setAttribute('aria-label', on ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'); return; }
       case 'logout':
         if (P.isCloud) { P.auth.signOut().then(() => { lastRoute = ''; history.replaceState(null, '', location.pathname); render(); }); return; }
         P.setSession(ROLE, null); history.replaceState(null, '', location.pathname); render(); return;
@@ -1672,6 +1718,7 @@
   });
 
   app.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && ui.drawer) { ui.drawer = false; render(); const bg = app.querySelector('.adm-burger'); if (bg) bg.focus(); return; }
     if (e.key === 'Enter' && !e.isComposing) {
       const el = e.target;
       if (el.dataset && el.dataset.gopt != null) { e.preventDefault(); addCustomValue(+el.dataset.gopt); return; }
@@ -2179,6 +2226,7 @@
   });
 
   window.addEventListener('hashchange', () => {
+    ui.drawer = false;
     ui.confirm = null; ui.fEdit = null; ui.cEdit = null; ui.cDel = null; ui.dataAsk = null;
     ui.lEdit = null; ui.lDraft = null; ui.lDel = null; ui.bulkAsk = false;
     ui.jEdit = null; ui.jDraft = null; ui.jDel = null; ui.oEdit = false;
