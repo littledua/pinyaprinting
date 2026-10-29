@@ -335,6 +335,21 @@
     ).join('')}</div>`;
   }
 
+  // Sắp xếp ảnh sản phẩm: ảnh đầu tiên là ảnh bìa
+  function imgSorter(images) {
+    const n = images.length;
+    return `<ol class="imgsort">${images.map((src, i) => `<li${i === 0 ? ' class="cover"' : ''}>
+      <img src="${esc(src)}" alt="Ảnh ${i + 1}">${i === 0 ? '<span class="cover-tag">Ảnh bìa</span>' : ''}
+      <div class="imgsort-bar">
+        <button type="button" class="icon-btn" data-act="pimg-move" data-i="${i}" data-d="-1" aria-label="Đưa ảnh ${i + 1} lên trước"${i === 0 ? ' disabled' : ''}>◀</button>
+        <span>${i + 1}/${n}</span>
+        <button type="button" class="icon-btn" data-act="pimg-move" data-i="${i}" data-d="1" aria-label="Đưa ảnh ${i + 1} ra sau"${i === n - 1 ? ' disabled' : ''}>▶</button>
+        <button type="button" class="icon-btn danger" data-act="pimg-rm" data-i="${i}" aria-label="Bỏ ảnh ${i + 1}">✕</button>
+      </div>
+      ${i > 0 ? `<button type="button" class="link-btn imgsort-cover" data-act="pimg-cover" data-i="${i}">Làm ảnh bìa</button>` : ''}
+    </li>`).join('')}</ol>`;
+  }
+
   function factoryOptions(db, o, selected) {
     const cats = new Set(o.items.map(i => i.catId));
     const fit = db.factories.filter(f => f.cats.some(c => cats.has(c)));
@@ -758,7 +773,7 @@
         </div>
         <div class="stack">
           <section class="panel"><div class="panel-h"><h2>Ảnh sản phẩm</h2></div>
-            ${p.images.length ? gallery(p.images, true, 'pimg-rm') + '<p class="hint">Ảnh đầu tiên là ảnh bìa. Bấm vào ảnh để bỏ.</p>' : '<p class="muted">Chưa có ảnh. Cửa hàng sẽ hiện ô màu theo danh mục.</p>'}
+            ${p.images.length ? imgSorter(p.images) + '<p class="hint">Ảnh đầu tiên là ảnh bìa: hiện trên thẻ sản phẩm và bong bóng danh mục. Dùng ◀ ▶ để đổi thứ tự, hoặc bấm "Làm ảnh bìa".</p>' : '<p class="muted">Chưa có ảnh. Cửa hàng sẽ hiện ô màu theo danh mục.</p>'}
             <div class="actions" style="margin-top:10px">
               <input id="pimg-files" type="file" accept="image/*" multiple class="sr-only file-in">
               <label class="btn btn-quiet btn-sm" for="pimg-files">Thêm ảnh</label>
@@ -1234,6 +1249,7 @@
     const initial = esc((db.settings.adminName || 'P').trim().charAt(0).toUpperCase());
     const avatar = l.avatar ? `<img src="${esc(l.avatar)}" alt="">` : initial;
     const swatches = Object.keys(P.THEMES).map(k => `<button class="swatch" type="button" data-act="lk-theme" data-v="${k}" aria-pressed="${l.theme === k}" style="--dot:${P.THEMES[k].dot}"><i></i>${esc(P.THEMES[k].name)}</button>`).join('');
+    const accents = Object.keys(P.ACCENTS).map(k => `<button class="swatch" type="button" data-act="lk-accent" data-v="${k}" aria-pressed="${l.accent === k}" style="--dot:${P.ACCENTS[k].dot}"><i></i>${esc(P.ACCENTS[k].name)}</button>`).join('');
     const seg = (act, items, cur) => `<div class="seg" role="group">${Object.keys(items).map(k => `<button type="button" data-act="${act}" data-v="${k}" aria-pressed="${cur === k}">${esc(items[k])}</button>`).join('')}</div>`;
     const showBox = (k, label) => `<label class="check"><input type="checkbox" data-nokeep="1" data-lshow="${k}"${l.show[k] !== false ? ' checked' : ''}>${esc(label)}</label>`;
     const catBox = c => `<label class="check"><input type="checkbox" data-nokeep="1" data-lcat="${esc(c.id)}"${l.hiddenCats.includes(c.id) ? '' : ' checked'}>${esc(c.name)}</label>`;
@@ -1250,6 +1266,9 @@
               ${l.avatar ? '<button class="link-btn" type="button" data-act="lk-avatar-rm">Bỏ ảnh</button>' : ''}</div></div></div>
         <h2 class="sec-title">Màu chủ đạo</h2>
         <div class="swatches" role="group" aria-label="Màu chủ đạo">${swatches}</div>
+        <h2 class="sec-title">Màu nhấn</h2>
+        <p class="hint" style="margin-bottom:8px">Màu thứ hai: số trên giỏ hàng, nút "+" trên thẻ sản phẩm, dải Nổi bật tuần này, nhãn số lượng tối thiểu.</p>
+        <div class="swatches" role="group" aria-label="Màu nhấn">${accents}</div>
         <h2 class="sec-title">Sáng hay tối</h2>
         ${seg('lk-mode', P.MODES, l.mode)}
         <h2 class="sec-title">Font chữ</h2>
@@ -1441,6 +1460,7 @@
       case 'fe-del-yes': P.update(d => P.act.deleteJobFee(d, t.dataset.id)); ui.feDel = null; done('Đã xóa khoản phụ phí.'); return;
       // Giao diện
       case 'lk-theme': ui.look.theme = t.dataset.v; render(); return;
+      case 'lk-accent': ui.look.accent = t.dataset.v; render(); return;
       case 'lk-mode': ui.look.mode = t.dataset.v; render(); return;
       case 'lk-size': ui.look.size = t.dataset.v; render(); return;
       case 'lk-avatar-rm': ui.look.avatar = ''; render(); return;
@@ -1589,6 +1609,17 @@
       case 'v-add': ui.prod.variants.push(newVariant()); render(); { const v = ui.prod.variants[ui.prod.variants.length - 1]; const el = document.getElementById('pv-name-' + v.id); if (el) el.focus(); } return;
       case 'v-rm': if (ui.prod.variants.length > 1) { ui.prod.variants = ui.prod.variants.filter(v => v.id !== t.dataset.id); render(); } return;
       case 'pimg-rm': ui.prod.images.splice(i, 1); render(); return;
+      case 'pimg-move': {
+        const j = i + (+t.dataset.d);
+        const im = ui.prod.images;
+        if (j < 0 || j >= im.length) return;
+        [im[i], im[j]] = [im[j], im[i]];
+        render();
+        const b = app.querySelector(`[data-act="pimg-move"][data-i="${j}"][data-d="${t.dataset.d}"]`) || app.querySelector(`[data-act="pimg-move"][data-i="${j}"]:not([disabled])`);
+        if (b) b.focus({ preventScroll: true });
+        return;
+      }
+      case 'pimg-cover': { const im = ui.prod.images; im.unshift(im.splice(i, 1)[0]); render(); P.ui.toast('Đã đặt làm ảnh bìa.'); return; }
       case 'p-del-ask': ui.prodDel = true; render(); return;
       case 'p-del-no': ui.prodDel = false; render(); return;
       case 'p-del-yes': {

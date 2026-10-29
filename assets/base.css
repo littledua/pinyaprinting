@@ -21,6 +21,10 @@
   --l:#C7B9F2;
   --p:#F7C4A3;
 
+  /* Màu nhấn thứ hai (mặc định hồng, chọn lại ở Cài đặt › Giao diện) */
+  --pop:#F7C6D9; --pop-deep:#E88FB3; --pop-soft:#FDE8F0; --on-pop:#4A1530;
+  /* Chữ giá tiền, biểu tượng: xanh xám đủ tương phản trên nền trắng */
+  --price:#3F6E92;
   --cta:#8FCBF0;
   --cta-hover:#79C0EC;
   --on-cta:#12324A;
@@ -41,8 +45,8 @@
   --run-fg:#3F5A72; --run-bg:#E8F1F8;
 
   --font-display:"Quicksand","Nunito",system-ui,sans-serif;
-  --font-body:"Nunito","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
-  --font-mono:"Nunito","Segoe UI",system-ui,sans-serif;
+  --font-body:"Quicksand","Nunito","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  --font-mono:"Quicksand","Segoe UI",system-ui,sans-serif;
   --font-cjk:"Noto Sans SC","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
 
   --r:16px;
@@ -56,6 +60,7 @@
     --sky:#8FCBF0; --sky-deep:#7CC0EE; --sky-soft:#1C3549; --sky-wash:#122434; --accent-text:#9AD3F5;
     --c:#7FCBF0; --m:#F2A0C4; --y:#F5DA7E; --k:#8DA0B4; --g:#93D3BB; --l:#BCAEEE; --p:#F2BB98;
     --cta:#8FCBF0; --cta-hover:#A9D8F5; --on-cta:#0F2233; --on-ink:#FFFFFF;
+    --pop:#F2A0C4; --pop-deep:#F08BB8; --pop-soft:#3A1F2D; --on-pop:#2A0D1C; --price:#9AD3F5;
     --proof:#E9EEF2; --proof-ink:#1E3A52; --proof-rule:#BACBD8;
     --focus:#8FCBF0; --err:#FF8A8E;
     --veil:rgba(14,24,34,.86); --scrim:rgba(0,0,0,.6);
@@ -72,6 +77,7 @@
   --sky:#8FCBF0; --sky-deep:#7CC0EE; --sky-soft:#1C3549; --sky-wash:#122434; --accent-text:#9AD3F5;
   --c:#7FCBF0; --m:#F2A0C4; --y:#F5DA7E; --k:#8DA0B4; --g:#93D3BB; --l:#BCAEEE; --p:#F2BB98;
   --cta:#8FCBF0; --cta-hover:#A9D8F5; --on-cta:#0F2233; --on-ink:#FFFFFF;
+  --pop:#F2A0C4; --pop-deep:#F08BB8; --pop-soft:#3A1F2D; --on-pop:#2A0D1C; --price:#9AD3F5;
   --proof:#E9EEF2; --proof-ink:#1E3A52; --proof-rule:#BACBD8;
   --focus:#8FCBF0; --err:#FF8A8E;
   --veil:rgba(14,24,34,.86); --scrim:rgba(0,0,0,.6);

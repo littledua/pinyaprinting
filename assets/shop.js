@@ -8,7 +8,7 @@
 
   const MAXQ = 99999;
   const clampQ = (q, min) => Math.min(MAXQ, Math.max(min || 1, q || 0));
-  const ui = { q: '', sort: 'new', sel: null, confirm: null, trackErr: '', busy: false };
+  const ui = { q: '', menu: false, more: {}, sort: 'new', sel: null, confirm: null, trackErr: '', busy: false };
   let lastRoute = '';
   let booted = false;
   const reading = new Set(); // đơn đang gửi yêu cầu "đã đọc", tránh gửi lặp
@@ -30,6 +30,10 @@
     pin: svg('<path d="M12 21s7-6 7-12a7 7 0 0 0-14 0c0 6 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/>'),
     link: svg('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
     search: svg('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>'),
+    menu: svg('<path d="M4 7h16M4 12h16M4 17h16"/>'),
+    close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
+    left: svg('<path d="M15 5l-7 7 7 7"/>'),
+    right: svg('<path d="M9 5l7 7-7 7"/>'),
     check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
     folder: svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>')
   };
@@ -116,95 +120,193 @@
     root.innerHTML = header(db, r) + '<main id="main">' + body + '</main>' + footer(db);
     document.title = (title ? title + ' · ' : '') + db.settings.shopName;
     if (keep) restore(keep);
+    if (document.activeElement && document.activeElement.id === 'find-q' && r.view !== 'search') showDrop(db);
     const thread = document.getElementById('thread');
     if (thread) thread.scrollTop = thread.scrollHeight;
   }
 
+  function showDrop(db) {
+    const box = document.getElementById('find-drop');
+    if (!box) return;
+    const html = findDrop(db, ui.q);
+    box.innerHTML = html;
+    box.hidden = !html;
+  }
+  function hideDrop() { const box = document.getElementById('find-drop'); if (box) box.hidden = true; }
+
   function notFound(h, p) {
-    return `<div class="wrap page"><div class="panel empty"><h3>${esc(h)}</h3><p>${esc(p)}</p><a class="btn btn-ghost btn-sm" href="#gioi-thieu">Về trang giới thiệu</a></div></div>`;
+    return `<div class="wrap page"><div class="panel empty"><h3>${esc(h)}</h3><p>${esc(p)}</p><a class="btn btn-ghost btn-sm" href="#gioi-thieu">Về trang chủ</a></div></div>`;
   }
 
   // ==== Khung trang ====
+  // Đầu trang kiểu Tiệm Dứa: logo tròn + tên + khẩu hiệu, ô tìm kiếm (máy tính nằm giữa, điện thoại xuống hàng dưới),
+  // chữ menu trên máy tính, nút ☰ mở menu thả xuống trên điện thoại, giỏ hàng có số màu nhấn.
+  function navLinks(db, r) {
+    const cur = c => c ? ' aria-current="page"' : '';
+    const activeCat = r.view === 'cat' ? r.id : r.view === 'product' ? (P.findProduct(db, r.id) || {}).catId : null;
+    return {
+      cats: P.showSection(db, 'navCats') ? P.visibleCategories(db).map(c => `<a href="#dm-${esc(c.id)}" data-ink="${esc(c.ink)}"${cur(activeCat === c.id)}><i></i>${esc(c.name)}</a>`).join('') : '',
+      track: P.showSection(db, 'navTrack') ? `<a href="#theo-doi"${cur(r.view === 'track' || r.view === 'order')}>Theo dõi đơn</a>` : '',
+      contact: P.showSection(db, 'navContact') ? `<a href="#lien-he"${cur(r.view === 'contact')}>Liên hệ</a>` : ''
+    };
+  }
+
   function header(db, r) {
     const s = db.settings;
     const n = P.cartLines(db).length;
-    const cur = c => c ? ' aria-current="page"' : '';
-    const activeCat = r.view === 'cat' ? r.id : r.view === 'product' ? (P.findProduct(db, r.id) || {}).catId : null;
-    return `<header class="sh-head"><div class="wrap sh-row">
-      <a class="brand" href="#gioi-thieu">${P.brandMark()}<span class="brand-word">${esc(s.shopName)}</span></a>
-      <nav class="sh-nav" aria-label="Giới thiệu, danh mục in ấn, liên hệ">
-        ${P.showSection(db, 'navAbout') ? `<a href="#gioi-thieu"${cur(r.view === 'about')}>Giới thiệu</a>` : ''}
-        ${P.showSection(db, 'navCats') ? P.visibleCategories(db).map(c => `<a href="#dm-${esc(c.id)}" data-ink="${esc(c.ink)}"${cur(activeCat === c.id)}><i></i>${esc(c.name)}</a>`).join('') : ''}
-        ${P.showSection(db, 'navContact') ? `<a href="#lien-he"${cur(r.view === 'contact')}>Liên hệ</a>` : ''}
+    const L = navLinks(db, r);
+    const sub = s.tagline && P.showSection(db, 'tagline') ? `<small>${esc(s.tagline)}</small>` : '';
+    return `<header class="sh-head${ui.menu ? ' menu-open' : ''}"><div class="wrap sh-row">
+      <a class="brand" href="#gioi-thieu">${P.brandMark()}<span class="brand-word"><b>${esc(s.shopName)}</b>${sub}</span></a>
+      <form class="sh-find" id="find-form" role="search" data-keep>
+        <label class="sr-only" for="find-q">Tìm sản phẩm</label>${ICON.search}
+        <input id="find-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Tìm sản phẩm…" value="${esc(ui.q)}">
+        <button class="find-x" type="button" data-act="find-clear" aria-label="Xóa chữ tìm"${ui.q ? '' : ' hidden'}>×</button>
+        <div class="find-drop" id="find-drop" hidden></div>
+      </form>
+      <nav class="sh-links" aria-label="Menu chính">
+        ${P.showSection(db, 'catGrid') ? `<a href="#gioi-thieu"${r.view === 'about' ? ' aria-current="page"' : ''}>Sản phẩm</a>` : ''}${L.track}${L.contact}
       </nav>
       <div class="sh-tools">
-        <a class="sh-search" href="#tim-kiem" aria-label="Tìm sản phẩm"${cur(r.view === 'search')}>${ICON.search}</a>
-        ${P.showSection(db, 'navTrack') ? `<a class="sh-track" href="#theo-doi" title="Theo dõi đơn" aria-label="Theo dõi đơn"${cur(r.view === 'track' || r.view === 'order')}>${ICON.track}<span>Theo dõi đơn</span></a>` : ''}
-        <a class="cart-btn" href="#gio-hang" aria-label="Giỏ hàng${n ? ', ' + n + ' sản phẩm' : ''}"${cur(['cart', 'file', 'pay'].includes(r.view))}>${ICON.bag}${n ? `<span class="count">${n}</span>` : ''}</a>
+        <a class="cart-btn" href="#gio-hang" aria-label="Giỏ hàng${n ? ', ' + n + ' sản phẩm' : ''}"${['cart', 'file', 'pay'].includes(r.view) ? ' aria-current="page"' : ''}>${ICON.bag}${n ? `<span class="count">${n > 99 ? '99+' : n}</span>` : ''}</a>
+        <button class="menu-btn" type="button" data-act="menu" aria-expanded="${!!ui.menu}" aria-controls="sh-menu" aria-label="${ui.menu ? 'Đóng menu' : 'Mở menu'}">${ui.menu ? ICON.close : ICON.menu}</button>
       </div>
-    </div></header>`;
+    </div>
+    <nav class="sh-menu wrap" id="sh-menu" aria-label="Menu"${ui.menu ? '' : ' hidden'}>
+      <a href="#gioi-thieu"${r.view === 'about' ? ' aria-current="page"' : ''}>Trang chủ</a>
+      ${L.cats ? `<p class="sh-menu-h">Danh mục</p>${L.cats}` : ''}
+      ${L.track || L.contact ? `<p class="sh-menu-h">Hỗ trợ</p>${L.track}${L.contact}` : ''}
+    </nav></header>`;
   }
 
   function footer(db) {
     const s = db.settings;
     if (!P.showSection(db, 'footer')) return '';
+    const about = String(s.about || '').split(/\n+/).map(x => x.trim()).filter(Boolean)[0] || s.tagline || '';
     return `<footer class="sh-foot"><div class="wrap foot-grid">
-      <div><a class="brand" href="#gioi-thieu">${P.brandMark()}<span class="brand-word">${esc(s.shopName)}</span></a>${s.tagline && P.showSection(db, 'tagline') ? `<p>${esc(s.tagline)}</p>` : ''}</div>
+      <div class="foot-brand"><a class="brand" href="#gioi-thieu">${P.brandMark()}<span class="brand-word"><b>${esc(s.shopName)}</b></span></a>${about ? `<p>${esc(about)}</p>` : ''}</div>
+      ${P.showSection(db, 'footCats') ? `<div><h3>Khám phá</h3><ul class="foot-list">
+        ${P.visibleCategories(db).map(c => `<li><a href="#dm-${esc(c.id)}">${esc(c.name)}</a></li>`).join('')}
+        <li><a href="#tim-kiem">Tìm sản phẩm</a></li>
+      </ul></div>` : ''}
+      <div><h3>Hỗ trợ khách hàng</h3><ul class="foot-list">
+        <li><a href="#theo-doi">Theo dõi đơn</a></li><li><a href="#gio-hang">Giỏ hàng</a></li><li><a href="#lien-he">Liên hệ</a></li>
+      </ul></div>
       ${P.showSection(db, 'footContact') ? `<div><h3>Liên hệ</h3><ul class="foot-list">
-        <li>Zalo: ${esc(fmt.phone(s.zalo))}</li>
+        ${P.normPhone(s.zalo) ? `<li>Zalo: ${esc(fmt.phone(s.zalo))}</li>` : ''}
         ${s.email ? `<li>${esc(s.email)}</li>` : ''}${s.hours ? `<li>${esc(s.hours)}</li>` : ''}${s.address ? `<li>${esc(s.address)}</li>` : ''}
       </ul></div>` : ''}
-      ${P.showSection(db, 'footCats') ? `<div><h3>Danh mục in ấn</h3><ul class="foot-list">
-        ${P.visibleCategories(db).map(c => `<li><a href="#dm-${esc(c.id)}">${esc(c.name)}</a></li>`).join('')}
-        <li><a href="#theo-doi">Theo dõi tiến độ in</a></li>
-      </ul></div>` : ''}
-    </div><div class="wrap foot-bottom"><span>© ${new Date().getFullYear()} ${esc(s.shopName)}</span><a href="admin.html">Quản trị</a></div></footer>`;
+    </div><div class="wrap foot-bottom"><span>© ${new Date().getFullYear()} ${esc(s.shopName)}. In tại xưởng, giao toàn quốc.</span><a href="admin.html">Quản trị</a></div></footer>`;
   }
 
   function payRule(s) {
     return `Đơn dưới ${fmt.short(s.payThreshold)}: thanh toán 100% hoặc cọc ${s.depositLow}%. Đơn từ ${fmt.short(s.payThreshold)}: thanh toán 100% hoặc cọc ${s.depositHigh}%.`;
   }
 
-  // ==== Giới thiệu ====
-  function viewAbout(db) {
-    const s = db.settings;
-    const paras = String(s.about || '').split(/\n+/).filter(x => x.trim()).map(x => `<p>${esc(x)}</p>`).join('');
+  // ==== Sản phẩm hiển thị cho khách ====
+  const shown = db => db.products.filter(p => p.active && p.variants.length && P.catVisible(db, p.catId));
+  const minOf = p => Math.min.apply(null, p.variants.map(v => +v.minQty || 1));
+
+  // Thẻ sản phẩm kiểu Tiệm Dứa: khung trắng bo tròn, ảnh 4:5, nhãn số lượng tối thiểu, nút "+" màu nhấn.
+  function pcard(db, p, i) {
+    const pr = P.priceRange(p);
+    const min = minOf(p);
+    return `<a class="pcard" href="#sp-${esc(p.id)}"${i != null ? ` style="--i:${Math.min(i, 11)}"` : ''}>
+      <span class="pc-img">${P.thumb(db, p, 'pimg')}${min > 1 ? `<span class="pc-badge">Tối thiểu ${fmt.num(min)}</span>` : ''}<span class="pc-plus" aria-hidden="true">+</span></span>
+      <span class="pc-body"><h3>${esc(p.name)}</h3>
+        <span class="pc-price">${pr.min !== pr.max ? '<small>từ</small>' : ''}<b>${fmt.vnd(pr.min)}</b>${p.variants.length > 1 ? `<span>${p.variants.length} loại</span>` : ''}</span></span></a>`;
+  }
+
+  // Ảnh cho bong bóng danh mục: ảnh bìa (ảnh đầu tiên) của sản phẩm đầu tiên có ảnh trong danh mục.
+  function catCover(db, c) {
+    const p = db.products.find(x => x.active && x.catId === c.id && x.images && x.images[0]);
+    return p ? p.images[0] : '';
+  }
+  function bubbles(db, active) {
     const cats = P.visibleCategories(db);
-    const first = cats[0];
-    const count = id => db.products.filter(p => p.active && p.catId === id).length;
-    return `<section class="hero"><div class="wrap hero-in">
-        <div>
-          ${s.tagline && P.showSection(db, 'tagline') ? `<p class="eyebrow">${esc(s.tagline)}</p>` : ''}
-          <h1>${esc(s.shopName)}</h1>
-          <div class="about">${paras}</div>
-          ${P.showSection(db, 'heroBtns') ? `<div class="hero-actions">
-            ${first ? `<a class="btn btn-cta" href="#dm-${esc(first.id)}">Xem sản phẩm</a>` : ''}
-            <a class="btn btn-ghost" href="#theo-doi">Theo dõi tiến độ in</a>
-          </div>` : ''}
-        </div>
-        ${!P.showSection(db, 'heroArt') ? '' : P.hasLogo()
-          ? `<div class="hero-art hero-logo"><img src="${esc(P.logoSrc())}" alt="Logo ${esc(s.shopName)}"></div>`
-          : `<div class="hero-art" aria-hidden="true"><div class="sheet">${CROPS}
-          <div class="slug"><span>${esc(s.shopName)}</span><span>Bản in thử</span></div>
-          <div class="plates"><span class="plate c"></span><span class="plate m"></span><span class="plate y"></span></div>
-          ${BAR}
-        </div></div>`}
-      </div></section>
-      ${!P.showSection(db, 'catGrid') ? '' : `<section class="wrap sec" aria-labelledby="dm-title">
-        <div class="sec-h"><h2 id="dm-title">Danh mục in ấn</h2><p>Chọn danh mục để xem sản phẩm và giá từng phân loại.</p></div>
-        ${cats.length ? `<div class="cat-grid">${cats.map(c => {
-          const n = count(c.id);
-          return `<a class="cat-card" data-ink="${esc(c.ink)}" href="#dm-${esc(c.id)}"><span class="blob"></span><h3>${esc(c.name)}</h3>${c.desc ? `<p>${esc(c.desc)}</p>` : ''}<span class="cnt">${n ? n + ' sản phẩm' : 'Sắp có sản phẩm'} →</span></a>`;
-        }).join('')}</div>` : '<div class="panel empty"><p>Shop đang cập nhật danh mục.</p></div>'}
-      </section>`}`;
+    if (!cats.length) return '';
+    return `<nav class="bubbles" aria-label="Danh mục"><div class="wrap bub-row">${cats.map(c => {
+      const img = catCover(db, c);
+      return `<a class="bub" href="#dm-${esc(c.id)}" data-ink="${esc(c.ink)}"${active === c.id ? ' aria-current="page"' : ''}>
+        <span class="bub-ring">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : `<span class="bub-ph">${esc(c.name.trim().charAt(0).toUpperCase())}</span>`}</span>
+        <span class="bub-name">${esc(c.name)}</span></a>`;
+    }).join('')}</div></nav>`;
+  }
+
+  // Nổi bật tuần này: đặt nhiều nhất 7 ngày qua; chưa có đơn thì lấy bán chạy mọi lúc, rồi mới nhất.
+  function featured(db) {
+    const list = shown(db);
+    if (list.length < 2) return [];
+    const since = Date.now() - 7 * 864e5;
+    const score = {}, all = {};
+    (db.orders || []).forEach(o => {
+      if (o.status === 'huy') return;
+      (o.items || []).forEach(it => {
+        all[it.productId] = (all[it.productId] || 0) + (+it.qty || 0);
+        if ((o.createdAt || 0) >= since) score[it.productId] = (score[it.productId] || 0) + (+it.qty || 0);
+      });
+    });
+    return list.slice().sort((a, b) => (score[b.id] || 0) - (score[a.id] || 0) || (all[b.id] || 0) - (all[a.id] || 0) || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 10);
+  }
+  function featuredStrip(db) {
+    const list = featured(db);
+    if (!list.length) return '';
+    return `<section class="feat" aria-labelledby="feat-h"><div class="wrap">
+      <div class="sec-h"><div><h2 id="feat-h">Nổi bật tuần này</h2><p>Được đặt nhiều nhất 7 ngày qua</p></div>
+        <div class="feat-arrows"><button type="button" class="round-btn" data-act="feat-prev" aria-label="Xem sản phẩm trước">${ICON.left}</button><button type="button" class="round-btn" data-act="feat-next" aria-label="Xem sản phẩm sau">${ICON.right}</button></div></div>
+      <div class="feat-row" id="feat-row">${list.map(p => {
+        const pr = P.priceRange(p);
+        return `<a class="fcard" href="#sp-${esc(p.id)}"><span class="fcard-img">${P.thumb(db, p, 'pimg')}</span><b>${esc(p.name)}</b><span>${fmt.vnd(pr.min)}</span></a>`;
+      }).join('')}</div>
+    </div></section>`;
+  }
+
+  // Lưới "Tất cả sản phẩm": chip danh mục, sắp xếp, xem thêm 20 sản phẩm mỗi lần.
+  const PAGE = 20;
+  const SORTS = [['new', 'Mới nhất'], ['hot', 'Bán chạy'], ['low', 'Giá thấp → cao'], ['high', 'Giá cao → thấp'], ['name', 'Tên A → Z']];
+  function sortProducts(db, list) {
+    const sold = {};
+    (db.orders || []).forEach(o => { if (o.status !== 'huy') (o.items || []).forEach(it => { sold[it.productId] = (sold[it.productId] || 0) + (+it.qty || 0); }); });
+    const by = {
+      new: (a, b) => (b.createdAt || 0) - (a.createdAt || 0),
+      hot: (a, b) => (sold[b.id] || 0) - (sold[a.id] || 0),
+      low: (a, b) => P.priceRange(a).min - P.priceRange(b).min,
+      high: (a, b) => P.priceRange(b).min - P.priceRange(a).min,
+      name: (a, b) => a.name.localeCompare(b.name, 'vi')
+    };
+    return list.slice().sort(by[ui.sort] || by.new);
+  }
+  function browser(db, catId, title, sub) {
+    const all = shown(db);
+    const list = sortProducts(db, catId ? all.filter(p => p.catId === catId) : all);
+    const cats = P.visibleCategories(db).filter(c => all.some(p => p.catId === c.id));
+    const limit = ui.more[catId || 'all'] || PAGE;
+    const head = `<div class="sec-h"><div><${catId ? 'h1' : 'h2'}>${esc(title)}</${catId ? 'h1' : 'h2'}>${sub ? `<p>${esc(sub)}</p>` : ''}</div>
+      ${list.length > 1 && P.showSection(db, 'sort') ? `<div class="sort-wrap"><label for="sort">Sắp xếp</label><select class="sort" id="sort">${SORTS.map(([v, l]) => `<option value="${v}"${ui.sort === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}</div>`;
+    const chips = cats.length > 1 ? `<div class="chips" role="list"><a role="listitem" class="chip" href="#gioi-thieu"${catId ? '' : ' aria-current="page"'}>Tất cả <span>${all.length}</span></a>${cats.map(c => `<a role="listitem" class="chip" href="#dm-${esc(c.id)}"${catId === c.id ? ' aria-current="page"' : ''}>${esc(c.name)} <span>${all.filter(p => p.catId === c.id).length}</span></a>`).join('')}</div>` : '';
+    const grid = list.length
+      ? `<div class="pgrid">${list.slice(0, limit).map((p, i) => pcard(db, p, i)).join('')}</div>
+         ${list.length > limit ? `<div class="more"><p>Đang xem ${fmt.num(limit)} / ${fmt.num(list.length)}</p><button class="btn btn-soft" type="button" data-act="more" data-k="${esc(catId || 'all')}">Xem thêm ${fmt.num(Math.min(PAGE, list.length - limit))} sản phẩm</button></div>` : ''}`
+      : `<div class="panel empty"><h3>Danh mục đang cập nhật sản phẩm</h3><p>Bạn cần in gì trong mục này, nhắn shop để được tư vấn.</p><a class="btn btn-ghost btn-sm" href="#lien-he">Liên hệ shop</a></div>`;
+    return head + chips + grid;
+  }
+
+  // ==== Trang chủ ====
+  function viewAbout(db) {
+    const showAll = P.showSection(db, 'allGrid');
+    const bub = P.showSection(db, 'catGrid') ? bubbles(db, null) : '';
+    const feat = P.showSection(db, 'featured') ? featuredStrip(db) : '';
+    const any = shown(db).length;
+    return `${bub}${feat}
+      ${showAll || !any ? `<section class="wrap sec" id="san-pham">${any ? browser(db, null, 'Tất cả sản phẩm', '') : '<div class="panel empty"><h3>Shop đang cập nhật sản phẩm</h3><p>Nhắn shop để được tư vấn.</p><a class="btn btn-ghost btn-sm" href="#lien-he">Liên hệ shop</a></div>'}</section>` : ''}`;
   }
 
   // ==== Tìm sản phẩm ====
-  const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').replace(/×/g, 'x').toLowerCase();
+  const fold = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').replace(/×/g, 'x').toLowerCase();
   function searchHits(db, q) {
     const words = fold(q).split(/\s+/).filter(Boolean);
     if (!words.length) return null;
-    return db.products.filter(p => p.active && p.variants.length && P.catVisible(db, p.catId)).filter(p => {
+    return shown(db).filter(p => {
       const c = P.findCategory(db, p.catId);
       const hay = fold([p.name, p.desc, c && c.name].concat(p.variants.map(v => v.name)).join(' '));
       return words.every(w => hay.includes(w));
@@ -212,50 +314,28 @@
   }
   function searchResults(db, q) {
     const hits = searchHits(db, q);
-    if (hits === null) return '<p class="muted">Gõ tên sản phẩm, loại hoặc kích thước, ví dụ “hộp giấy”, “móc khóa”.</p>';
+    if (hits === null) return '<p class="muted">Gõ tên sản phẩm, loại hoặc kích thước vào ô tìm kiếm ở trên, ví dụ “hộp giấy”, “móc khóa”.</p>';
     if (!hits.length) return `<div class="panel empty"><h3>Không thấy sản phẩm phù hợp</h3><p>Thử từ khóa ngắn hơn, hoặc chọn từ danh mục.</p><a class="btn btn-ghost btn-sm" href="#lien-he">Nhắn shop để được tư vấn</a></div>`;
-    return `<p class="muted" style="margin-bottom:12px" aria-live="polite">${hits.length} sản phẩm</p><div class="pgrid">${hits.map(p => pcard(db, p)).join('')}</div>`;
+    return `<p class="muted" style="margin-bottom:14px" aria-live="polite">${hits.length} sản phẩm cho “${esc(q.trim())}”</p><div class="pgrid">${hits.map((p, i) => pcard(db, p, i)).join('')}</div>`;
+  }
+  // Gợi ý ngay dưới ô tìm (như Tiệm Dứa): tối đa 6 sản phẩm, dòng cuối "Xem tất cả".
+  function findDrop(db, q) {
+    const hits = searchHits(db, q);
+    if (!hits) return '';
+    if (!hits.length) return '<p class="fd-empty">Không thấy sản phẩm phù hợp.</p>';
+    return hits.slice(0, 6).map(p => `<a class="fd-row" href="#sp-${esc(p.id)}">${P.thumb(db, p, 'fd-img')}<span><b>${esc(p.name)}</b><span>${fmt.vnd(P.priceRange(p).min)}</span></span></a>`).join('') +
+      `<a class="fd-all" href="#tim-kiem">Xem tất cả ${hits.length} kết quả →</a>`;
   }
   function viewSearch(db) {
-    return `<div class="wrap page">
-      <div class="page-head"><div><h1>Tìm sản phẩm</h1></div></div>
-      <form class="search-bar" id="search-form" role="search" data-keep>
-        <label class="sr-only" for="shop-q">Tên sản phẩm</label>
-        <input id="shop-q" class="search" type="search" enterkeyhint="search" autocomplete="off" placeholder="Tìm theo tên, loại, kích thước…" value="${esc(ui.q)}">
-      </form>
+    return `<div class="wrap page"><div class="sec-h"><div><h1>Tìm sản phẩm</h1></div></div>
       <div id="search-out">${searchResults(db, ui.q)}</div></div>`;
   }
 
   // ==== Danh mục ====
-  function sortProducts(list) {
-    const by = {
-      new: (a, b) => b.createdAt - a.createdAt,
-      low: (a, b) => P.priceRange(a).min - P.priceRange(b).min,
-      high: (a, b) => P.priceRange(b).min - P.priceRange(a).min,
-      name: (a, b) => a.name.localeCompare(b.name, 'vi')
-    };
-    return list.slice().sort(by[ui.sort] || by.new);
-  }
-
-  function pcard(db, p) {
-    const pr = P.priceRange(p);
-    return `<a class="pcard" href="#sp-${esc(p.id)}">${P.thumb(db, p, 'pimg')}<div class="pbody">${P.catTag(db, p.catId)}
-      <h3>${esc(p.name)}</h3><p class="pmeta">${p.variants.length} phân loại</p>
-      <p class="price">${pr.min !== pr.max ? 'Từ ' : ''}<b>${fmt.vnd(pr.min)}</b></p></div></a>`;
-  }
-
   function viewCat(db, id) {
     const c = P.findCategory(db, id);
     if (!c || !P.catVisible(db, c.id)) return notFound('Không tìm thấy danh mục này', 'Danh mục có thể đã được đổi tên hoặc gỡ bỏ.');
-    const list = sortProducts(db.products.filter(p => p.active && p.catId === c.id && p.variants.length));
-    const sorts = [['new', 'Mới nhất'], ['low', 'Giá thấp → cao'], ['high', 'Giá cao → thấp'], ['name', 'Tên A → Z']];
-    return `<div class="wrap page">
-      <nav class="crumbs" aria-label="Đường dẫn"><a href="#gioi-thieu">Giới thiệu</a><span>/</span><span aria-current="page">${esc(c.name)}</span></nav>
-      <div class="page-head"><div><h1>${esc(c.name)}</h1>${c.desc ? `<p>${esc(c.desc)}</p>` : ''}</div>
-        ${list.length > 1 && P.showSection(db, 'sort') ? `<div><label class="sr-only" for="sort">Sắp xếp</label><select class="sort" id="sort">${sorts.map(([v, l]) => `<option value="${v}"${ui.sort === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}</div>
-      ${list.length ? `<div class="pgrid">${list.map(p => pcard(db, p)).join('')}</div>`
-        : `<div class="panel empty"><h3>Danh mục đang cập nhật sản phẩm</h3><p>Bạn cần in gì trong mục này, nhắn shop để được tư vấn.</p><a class="btn btn-ghost btn-sm" href="#lien-he">Liên hệ shop</a></div>`}
-    </div>`;
+    return `${P.showSection(db, 'catGrid') ? bubbles(db, c.id) : ''}<div class="wrap page">${browser(db, c.id, c.name, c.desc)}</div>`;
   }
 
   // ==== Sản phẩm ====
@@ -724,6 +804,7 @@
   }
 
   root.addEventListener('click', e => {
+    if (!e.target.closest('.sh-find')) hideDrop();
     const t = e.target.closest('[data-act],[data-copy-value]');
     if (!t) return;
 
@@ -760,6 +841,20 @@
         ui.sel.qty = clampQ(ui.sel.qty + (a === 'qty+' ? step : -step), min);
         render(); return;
       }
+      case 'menu': ui.menu = !ui.menu; render(); return;
+      case 'find-clear': {
+        ui.q = ''; hideDrop();
+        const inp = document.getElementById('find-q'); if (inp) { inp.value = ''; inp.focus(); }
+        t.hidden = true;
+        const out = document.getElementById('search-out'); if (out) out.innerHTML = searchResults(P.load(), '');
+        return;
+      }
+      case 'more': { const k = t.dataset.k; ui.more[k] = (ui.more[k] || PAGE) + PAGE; render(); return; }
+      case 'feat-prev': case 'feat-next': {
+        const row = document.getElementById('feat-row');
+        if (row) row.scrollBy({ left: (a === 'feat-next' ? 1 : -1) * row.clientWidth * 0.8, behavior: reduceMotion ? 'auto' : 'smooth' });
+        return;
+      }
       case 'add': if (addSelected()) { P.ui.toast('Đã thêm vào giỏ hàng.'); render(); } return;
       case 'buy': if (addSelected()) go('gio-hang'); return;
       case 'cq-': case 'cq+':
@@ -795,10 +890,12 @@
       if (v && out) out.textContent = 'Thành tiền ' + fmt.vnd(v.price * clampQ(ui.sel.qty, 1));
       return;
     }
-    if (el.id === 'shop-q') {
+    if (el.id === 'find-q') {
       ui.q = el.value;
+      const x = root.querySelector('.find-x'); if (x) x.hidden = !ui.q;
       const out = document.getElementById('search-out');
       if (out) out.innerHTML = searchResults(P.load(), ui.q);
+      else showDrop(P.load());
       return;
     }
     if (el.id && document.getElementById('err-' + el.id) && document.getElementById('err-' + el.id).textContent) setErr(el.id, '');
@@ -840,7 +937,10 @@
     }
   });
 
+  root.addEventListener('focusin', e => { if (e.target.id === 'find-q' && ui.q && route().view !== 'search') showDrop(P.load()); });
+
   root.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { hideDrop(); if (ui.menu) { ui.menu = false; render(); } }
     if (e.target.id === 'chat-input' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       document.getElementById('chat-form').requestSubmit();
@@ -869,7 +969,12 @@
       return;
     }
 
-    if (f.id === 'search-form') { const i = document.getElementById('shop-q'); if (i) i.blur(); return; }
+    if (f.id === 'find-form') {
+      const i = document.getElementById('find-q'); if (i) i.blur();
+      hideDrop();
+      if (route().view !== 'search') go('tim-kiem');
+      return;
+    }
 
     if (f.id === 'chat-form') {
       const inp = document.getElementById('chat-input');
@@ -938,6 +1043,7 @@
   window.addEventListener('popstate', () => { popped = true; });
   window.addEventListener('hashchange', () => {
     ui.confirm = null;
+    ui.menu = false;
     curHash = location.hash;
     render();
     const y = popped && seenY[curHash] ? seenY[curHash] : 0;

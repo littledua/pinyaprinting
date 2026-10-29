@@ -478,3 +478,16 @@ a.soc:hover{text-decoration:underline}
 .imp-item img{width:100%;height:100%;object-fit:cover;display:block}
 .imp-item.on{border-color:var(--sky-deep);box-shadow:0 0 0 2px var(--sky-soft)}
 .imp-item input{position:absolute;top:6px;left:6px;width:20px;height:20px;accent-color:var(--sky-deep);margin:0}
+
+/* Sắp xếp ảnh sản phẩm: ảnh đầu tiên là ảnh bìa */
+.imgsort{list-style:none;margin:12px 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.imgsort li{position:relative;display:grid;gap:6px;padding:6px;border:1.5px solid var(--rule);border-radius:16px;background:var(--sheet)}
+.imgsort li.cover{border-color:var(--sky-deep);background:var(--sky-soft)}
+.imgsort img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:11px;background:var(--paper)}
+.cover-tag{position:absolute;left:12px;top:12px;font:800 .7rem/1 var(--font-body);background:var(--sheet);color:var(--ink);padding:5px 9px;border-radius:999px}
+.imgsort-bar{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.imgsort-bar span{font-size:.8rem;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.imgsort-bar .icon-btn{width:36px;height:36px;font-size:.85rem}
+.imgsort-bar .icon-btn:hover{border-color:var(--sky-deep);color:var(--sky-deep)}
+.imgsort-bar .icon-btn.danger:hover{border-color:var(--off-fg);color:var(--off-fg)}
+.imgsort-cover{justify-self:center;padding:4px 2px;font-size:.84rem}

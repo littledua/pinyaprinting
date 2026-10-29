@@ -359,13 +359,13 @@
   // ==== Giao diện tùy chỉnh: avatar, màu, font, cỡ chữ, mục hiển thị ====
   // Mục "show": true là hiện. Khóa thiếu coi như hiện (để thêm mục mới sau này không làm mất trang).
   const SHOW_KEYS = [
-    ['Thanh ngang', [['navAbout', 'Mục Giới thiệu'], ['navCats', 'Các danh mục in ấn'], ['navContact', 'Mục Liên hệ'], ['navTrack', 'Nút Theo dõi đơn']]],
-    ['Trang chủ', [['tagline', 'Dòng giới thiệu ngắn'], ['heroArt', 'Hình minh họa bên phải'], ['heroBtns', 'Hai nút Xem sản phẩm và Theo dõi'], ['catGrid', 'Lưới danh mục']]],
+    ['Đầu trang và menu', [['tagline', 'Khẩu hiệu nhỏ dưới tên shop'], ['navCats', 'Các danh mục trong menu'], ['navContact', 'Mục Liên hệ'], ['navTrack', 'Mục Theo dõi đơn']]],
+    ['Trang chủ', [['catGrid', 'Bong bóng danh mục'], ['featured', 'Dải Nổi bật tuần này'], ['allGrid', 'Tất cả sản phẩm']]],
     ['Danh mục và sản phẩm', [['sort', 'Ô sắp xếp sản phẩm'], ['pnotes', 'Ghi chú dưới sản phẩm (thời gian in, thanh toán)']]],
     ['Chân trang', [['footer', 'Hiện chân trang'], ['footContact', 'Cột Liên hệ'], ['footCats', 'Cột Danh mục']]]
   ];
   function baseLook() {
-    return { avatar: '', theme: 'sky', mode: 'auto', font: 'default', size: 'md', show: {}, hiddenCats: [] };
+    return { avatar: '', theme: 'sky', accent: 'pink', mode: 'auto', font: 'default', size: 'md', show: {}, hiddenCats: [] };
   }
   function normLook(l) {
     const b = baseLook();
@@ -373,6 +373,7 @@
     return {
       avatar: typeof l.avatar === 'string' ? l.avatar : '',
       theme: THEMES[l.theme] ? l.theme : b.theme,
+      accent: ACCENTS[l.accent] ? l.accent : b.accent,
       mode: ['auto', 'light', 'dark'].includes(l.mode) ? l.mode : b.mode,
       font: FONTS[l.font] ? l.font : b.font,
       size: SIZES[l.size] != null ? l.size : b.size,
@@ -393,11 +394,20 @@
     peach: { name: 'Cam đào', dot: '#F7C4A3', sky: '#F7C4A3', deep: '#D9772F', soft: '#FDE8D8', wash: '#FEF1E6', text: '#B35A16', hover: '#F2B085', onCta: '#4A2308', paper: '#FFFAF6', rule: '#F2E1D3',
       dark: { deep: '#EDA06B', soft: '#3B2616', wash: '#2B1C10', text: '#F5BE94' } }
   };
-  const THEME_VARS = ['--sky', '--sky-deep', '--sky-soft', '--sky-wash', '--accent-text', '--cta', '--cta-hover', '--on-cta', '--focus', '--paper', '--rule'];
+  // Màu nhấn thứ hai (kiểu Tiệm Dứa): số trên giỏ, nút "+", dải Nổi bật, nhãn số lượng tối thiểu.
+  const ACCENTS = {
+    pink: { name: 'Hồng', dot: '#F7C6D9', pop: '#F7C6D9', deep: '#E88FB3', soft: '#FDE8F0', on: '#4A1530', dark: { pop: '#F2A0C4', deep: '#F08BB8', soft: '#3A1F2D', on: '#2A0D1C' } },
+    yellow: { name: 'Vàng', dot: '#F8E7A1', pop: '#F8E7A1', deep: '#F0D86A', soft: '#FCF4D4', on: '#3D3205', dark: { pop: '#F5DA7E', deep: '#F0CF5A', soft: '#3A3212', on: '#2A2204' } },
+    sky: { name: 'Xanh', dot: '#A9D8F5', pop: '#A9D8F5', deep: '#7BBFEC', soft: '#E3F2FC', on: '#12324A', dark: { pop: '#8FCBF0', deep: '#7CC0EE', soft: '#1C3549', on: '#0F2233' } },
+    mint: { name: 'Bạc hà', dot: '#BDE8D4', pop: '#BDE8D4', deep: '#86CDB3', soft: '#E6F7EF', on: '#0E3326', dark: { pop: '#93D3BB', deep: '#7ACDAE', soft: '#17352B', on: '#0B261C' } },
+    lavender: { name: 'Tím', dot: '#D9CFF7', pop: '#D9CFF7', deep: '#B6A5EC', soft: '#F1EDFD', on: '#26194F', dark: { pop: '#BCAEEE', deep: '#B3A3EC', soft: '#2A2347', on: '#1B1338' } },
+    peach: { name: 'Cam đào', dot: '#FAD3BA', pop: '#FAD3BA', deep: '#F2B085', soft: '#FEF1E6', on: '#4A2308', dark: { pop: '#F2BB98', deep: '#EDA06B', soft: '#3B2616', on: '#2B1608' } }
+  };
+  const THEME_VARS = ['--pop', '--pop-deep', '--pop-soft', '--on-pop', '--sky', '--sky-deep', '--sky-soft', '--sky-wash', '--accent-text', '--cta', '--cta-hover', '--on-cta', '--focus', '--paper', '--rule'];
   const MODES = { auto: 'Theo thiết bị', light: 'Sáng', dark: 'Tối' };
   // gf: tên họ font trên Google Fonts (đều có tiếng Việt). Bỏ trống nếu đã tải sẵn hoặc là font hệ thống.
   const FONTS = {
-    default: { name: 'Mặc định (Quicksand + Nunito)' },
+    default: { name: 'Mặc định (Quicksand)' },
     nunito: { name: 'Nunito, tròn và dễ đọc', display: '"Nunito"', body: '"Nunito"' },
     vietnam: { name: 'Be Vietnam Pro, hiện đại', display: '"Be Vietnam Pro"', body: '"Be Vietnam Pro"', gf: 'Be+Vietnam+Pro:wght@400;500;600;700;800' },
     lexend: { name: 'Lexend, rộng và thoáng', display: '"Lexend"', body: '"Lexend"', gf: 'Lexend:wght@400;500;600;700' },
@@ -433,9 +443,16 @@
       }
     }
 
+    const a = ACCENTS[look.accent];
+    if (look.accent !== 'pink' && a) {
+      const ac = dark ? a.dark : a;
+      root.style.setProperty('--pop', ac.pop); root.style.setProperty('--pop-deep', ac.deep);
+      root.style.setProperty('--pop-soft', ac.soft); root.style.setProperty('--on-pop', ac.on);
+    }
+
     const f = FONTS[look.font];
     if (f && f.display) {
-      root.style.setProperty('--font-display', f.display + ',"Quicksand","Nunito",system-ui,sans-serif');
+      root.style.setProperty('--font-display', f.display + ',"Quicksand",system-ui,sans-serif');
       root.style.setProperty('--font-body', f.body + ',"Nunito","Segoe UI",system-ui,sans-serif');
       root.style.setProperty('--font-mono', f.body + ',"Nunito","Segoe UI",system-ui,sans-serif');
       if (f.gf && !document.getElementById('font-' + look.font)) {
@@ -1437,7 +1454,7 @@
     getCart, setCart, addToCart, cartLines, getTrack, setTrack, ordersByPhone,
     findOrder, findCustomer, findFactory, findProduct, findCategory, findCustomerByPhone,
     LOGO, loadLogo, brandMark, hasLogo: () => !!logoSrc(), logoSrc,
-    SHOW_KEYS, THEMES, MODES, FONTS, SIZE_NAMES, baseLook, normLook, applyLook, lookOf, showSection, catVisible, visibleCategories,
+    SHOW_KEYS, THEMES, ACCENTS, MODES, FONTS, SIZE_NAMES, baseLook, normLook, applyLook, lookOf, showSection, catVisible, visibleCategories,
     feeShares, feesOfJob, jobFeeTotal, jobFullCost,
     libGroup, groupName, groupOptions, combos, skuKey, rebuildSkus, variantsFromSkus, pickVariant,
     isCloud: CLOUD, init, auth, cust, uploadImage, imageImport, errText, pendingCount,
