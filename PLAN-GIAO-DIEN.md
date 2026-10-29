@@ -45,7 +45,15 @@ Mình mới tìm sơ trên web, **chưa mở đọc mã**. Sau khi bạn duyệt
 - Rủi ro: sửa nhiều CSS dễ làm lệch chỗ khác; mình sẽ chụp trước/sau từng trang.
 - Cần ảnh sản phẩm thật để trang sản phẩm đẹp (hiện chỉ có ô chữ cái).
 
-## 5. Câu hỏi cần bạn trả lời
+## 5. Bạn đã trả lời
+- Mức đổi: **tinh chỉnh**, giữ màu xanh trời nhạt, dấu cắt in, tên Pinya.
+- Admin: **điện thoại và máy tính như nhau**, nên làm cả thẻ đơn hàng trên điện thoại lẫn bảng rộng trên máy tính.
+- Ảnh thật: **sắp có**, trang sản phẩm xoay quanh ảnh lớn, ô chữ cái chỉ là chỗ tạm.
+- Còn mở: shop/web nào bạn thích để mình lấy cảm hứng (không bắt buộc).
+
+**Chưa làm gì cho tới khi bạn nói "duyệt".**
+
+## Câu hỏi ban đầu (đã hỏi)
 1. Muốn **tinh chỉnh** (giữ màu xanh trời nhạt, dấu cắt in, tên Pinya) hay **đổi hẳn phong cách**?
 2. Khách của bạn xem chủ yếu bằng **điện thoại** đúng không? Còn bạn dùng admin bằng điện thoại hay máy tính nhiều hơn?
 3. Bạn có ảnh sản phẩm thật chưa, hay còn dùng ô màu một thời gian?
