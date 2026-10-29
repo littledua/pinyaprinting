@@ -303,3 +303,16 @@
 .qr-box figcaption{font-size:.78rem;color:#5E768C;text-align:center;line-height:1.35}
 .qr-tag{position:absolute;top:-11px;left:50%;transform:translateX(-50%);white-space:nowrap;background:var(--pop);color:var(--on-pop);font:700 .72rem/1 var(--font-body);padding:5px 10px;border-radius:999px}
 @media (max-width:620px){.pay-qr{grid-template-columns:minmax(0,1fr)}.qr-box{justify-self:center}}
+
+/* Ảnh chụp chuyển khoản (bắt buộc trước khi đặt) */
+.proof-pick{display:grid;justify-items:center;gap:4px;margin-top:8px;padding:22px 16px;border:2px dashed color-mix(in srgb,var(--sky) 55%,transparent);border-radius:18px;text-align:center;color:var(--price);cursor:pointer;background:var(--sheet)}
+.proof-pick:hover{background:var(--sky-wash)}
+.proof-pick svg{width:26px;height:26px}
+.proof-pick span{font-size:.82rem;color:var(--ink-soft)}
+.proof:has(.err:not(:empty)) .proof-pick{border-color:var(--err);background:color-mix(in srgb,var(--off-bg) 50%,var(--sheet))}
+#proof-in:focus-visible + .proof-pick,#proof-in:focus-visible + .proof-ok label{outline:3px solid var(--focus);outline-offset:2px}
+.proof-ok{display:flex;align-items:center;gap:12px;margin-top:8px;padding:10px;border-radius:16px;background:var(--ok-bg);border:1px solid color-mix(in srgb,var(--ok-fg) 30%,transparent)}
+.proof-ok img{width:72px;height:72px;border-radius:12px;object-fit:cover;flex:none;background:#fff}
+.proof-ok div{flex:1;min-width:0;display:grid;font-size:.86rem}
+.proof-ok b{color:var(--ok-fg)}
+.proof-ok span{color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

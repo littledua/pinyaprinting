@@ -67,7 +67,7 @@
   function snapshot() {
     const snap = {};
     root.querySelectorAll('[data-keep] input[id],[data-keep] textarea[id],[data-keep] select[id]').forEach(el => {
-      if (el.type !== 'radio') snap[el.id] = el.value;
+      if (el.type !== 'radio' && el.type !== 'file') snap[el.id] = el.value;
     });
     const a = document.activeElement;
     return { snap, focus: a && root.contains(a) && a.id ? a.id : null };
@@ -550,6 +550,7 @@
               <span class="po-amt">${fmt.vnd(o.amount)}</span>
               <span class="po-note">${esc(o.note)}</span></label>`).join('')}</div>
           </fieldset>
+          ${transferBox(db, chosen.amount, co.code)}
           <section class="panel"><div class="panel-h"><h2>File thiết kế</h2><a class="link-btn" href="#gui-file">Sửa</a></div>
             <p class="copy-line" style="overflow-wrap:anywhere">${ICON.folder.replace('<svg', '<svg width="18" height="18"')}<a href="${esc(co.file)}" target="_blank" rel="noopener">${esc(co.file)}</a></p>
             ${co.note ? `<p class="muted" style="margin-top:6px">${esc(co.note)}</p>` : ''}
@@ -563,7 +564,7 @@
             <tr class="sub"><td>Trả khi nhận hàng</td><td id="pay-later">${fmt.vnd(sub - chosen.amount)}</td></tr>
           </tbody></table>
           <div class="actions"><button class="btn btn-cta" type="submit" form="checkout" style="width:100%">Đặt hàng</button></div>
-          <p class="hint" style="margin-top:10px">Đặt xong, trang hiện số tài khoản để bạn chuyển khoản.</p>
+          <p class="hint" style="margin-top:10px">Quét mã QR để chuyển khoản, tải ảnh chụp chuyển khoản lên rồi bấm Đặt hàng.</p>
         </aside>
       </div></div>
       <div class="buy-bar"><div><small>Chuyển khoản ngay</small><b id="pay-now2">${fmt.vnd(chosen.amount)}</b></div><button class="btn btn-cta" type="submit" form="checkout">Đặt hàng</button></div>`;
@@ -602,6 +603,30 @@
         <figcaption>Mở app ngân hàng, chọn quét mã QR. Số tiền và nội dung đã điền sẵn.</figcaption></figure>` : ''}${kv}</div>`;
   }
 
+  // Chuyển khoản ngay ở bước Thanh toán: mã đơn giữ trước làm nội dung, khách gửi ảnh chụp rồi mới đặt
+  function transferBox(db, amount, code) {
+    if (!code) {
+      if (!ui.reserving) {
+        ui.reserving = true;
+        P.cust.reserveCode().then(c => { patchCo({ code: c }); ui.reserving = false; render(); },
+          e => { ui.reserving = false; ui.codeErr = P.errText(e); render(); });
+      }
+      return `<section class="panel" id="pay-transfer"><div class="panel-h"><h2>Chuyển khoản</h2></div>
+        ${ui.codeErr ? `<p class="err">${esc(ui.codeErr)}</p><button class="btn btn-quiet btn-sm" type="button" data-act="code-retry">Thử lại</button>` : '<p class="muted">Đang tạo mã đơn cho bạn…</p>'}</section>`;
+    }
+    const pf = ui.proof;
+    return `<section class="panel" id="pay-transfer"><div class="panel-h"><h2>Chuyển khoản</h2><span class="muted">Mã đơn <b>${esc(code)}</b></span></div>
+      <p class="muted">Chuyển <b>${fmt.vnd(amount)}</b>, nội dung ghi đúng mã đơn <b>${esc(code)}</b>. Quét mã QR là có sẵn cả hai.</p>
+      ${bankBlock(db, amount, code)}
+      <div class="proof" id="proof-box">
+        <p class="lbl" style="margin-top:18px">Ảnh chụp chuyển khoản <span class="req" aria-hidden="true">*</span></p>
+        <input id="proof-in" type="file" accept="image/*" class="sr-only" aria-describedby="err-proof">
+        ${pf ? `<div class="proof-ok"><img src="${esc(pf.url)}" alt="Ảnh chuyển khoản đã chọn"><div><b>Đã chọn ảnh chuyển khoản</b><span>${esc(pf.name)}</span></div><label class="btn btn-quiet btn-sm" for="proof-in">Đổi ảnh</label></div>`
+          : `<label class="proof-pick" for="proof-in">${ICON.folder}<b>Tải lên ảnh chụp chuyển khoản</b><span>Chụp màn hình app ngân hàng sau khi chuyển · JPG, PNG</span></label>`}
+        <p class="err" id="err-proof"></p>
+      </div></section>`;
+  }
+
   function viewDone(db, id) {
     const o = P.findOrder(db, id);
     if (!o || !phoneOk(o)) return notFound('Không tìm thấy đơn này', 'Vào "Theo dõi đơn" và nhập số điện thoại đặt hàng để xem lại.');
@@ -609,8 +634,9 @@
     return `<div class="wrap page"><div class="done-wrap"><section class="panel lead">
       <div class="done-mark">${ICON.check}</div>
       <h1 style="font-size:1.8rem">Đã đặt hàng ${esc(o.id)}</h1>
-      <p class="muted" style="margin-top:8px">Cảm ơn ${esc(o.name)}. Bạn chọn <b>${esc(P.payLabel(o).toLowerCase())}</b>, chuyển khoản <b>${fmt.vnd(m.first)}</b> để shop báo xưởng in.</p>
-      ${bankBlock(db, m.first, o.id)}
+      ${o.paidNotice ? `<p class="muted" style="margin-top:8px">Cảm ơn ${esc(o.name)}. Shop đã nhận ảnh chuyển khoản <b>${fmt.vnd(m.first)}</b> (${esc(P.payLabel(o).toLowerCase())}). Shop kiểm tra tiền xong sẽ báo xưởng in, bạn theo dõi ở trang đơn.</p>`
+        : `<p class="muted" style="margin-top:8px">Cảm ơn ${esc(o.name)}. Bạn chọn <b>${esc(P.payLabel(o).toLowerCase())}</b>, chuyển khoản <b>${fmt.vnd(m.first)}</b> để shop báo xưởng in.</p>
+      ${bankBlock(db, m.first, o.id)}`}
       <div class="actions"><a class="btn btn-cta" href="#don-${esc(o.id)}">Xem tiến độ đơn này</a><a class="btn btn-ghost" href="#gioi-thieu">Về trang chủ</a></div>
       <p class="hint" style="margin-top:14px">Lần sau, vào "Theo dõi đơn" và nhập số ${esc(fmt.phone(o.phone))} để xem lại.</p>
     </section></div></div>`;
@@ -888,6 +914,7 @@
         render(); return;
       }
       case 'menu': ui.menu = !ui.menu; render(); return;
+      case 'code-retry': ui.codeErr = ''; render(); return;
       case 'find-clear': {
         ui.q = ''; hideDrop();
         const inp = document.getElementById('find-q'); if (inp) { inp.value = ''; inp.focus(); }
@@ -967,6 +994,16 @@
       refreshCartNumbers();
       return;
     }
+    if (el.id === 'proof-in') {
+      const file = el.files && el.files[0];
+      if (!file) return;
+      if (!/^image\//.test(file.type)) { setErr('proof', 'File này không phải ảnh. Chọn ảnh chụp màn hình chuyển khoản.'); return; }
+      if (file.size > 15 * 1024 * 1024) { setErr('proof', 'Ảnh quá lớn (trên 15MB).'); return; }
+      if (ui.proof) URL.revokeObjectURL(ui.proof.url);
+      ui.proof = { file, url: URL.createObjectURL(file), name: file.name };
+      render();
+      return;
+    }
     // Chọn cách thanh toán: cập nhật số tiền ngay trong khung tóm tắt
     if (el.name === 'pay') {
       const db = P.load();
@@ -977,6 +1014,7 @@
       document.getElementById('pay-label').textContent = o.label;
       document.getElementById('pay-now').textContent = fmt.vnd(o.amount);
       const pn2 = document.getElementById('pay-now2'); if (pn2) pn2.textContent = fmt.vnd(o.amount);
+      render(); // mã QR đổi theo số tiền vừa chọn
       document.getElementById('pay-later').textContent = fmt.vnd(sub - o.amount);
     }
   });
@@ -1064,18 +1102,30 @@
       if (ui.busy) return;
       const sub = lines.reduce((a, l) => a + l.line, 0);
       const allowed = P.payOptions(db.settings, sub).map(x => x.pct);
-      const btn = document.querySelector('button[form="checkout"]');
-      ui.busy = true; if (btn) { btn.disabled = true; btn.textContent = 'Đang gửi đơn…'; }
-      P.cust.submitOrder(lines, Object.assign({}, info, { file: co.file, note: co.note || '', payPct: allowed.includes(picked) ? picked : 100 })).then(o => {
+      if (!co.code) { P.ui.toast('Đang tạo mã đơn, chờ một chút rồi bấm lại.'); return; }
+      if (!ui.proof) {
+        setErr('proof', 'Tải lên ảnh chụp chuyển khoản trước khi đặt hàng.');
+        const box = document.getElementById('proof-box'); if (box) box.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+        return;
+      }
+      const btns = document.querySelectorAll('button[form="checkout"]');
+      const setBtn = (dis, txt) => btns.forEach(b => { b.disabled = dis; b.textContent = txt; });
+      ui.busy = true; setBtn(true, 'Đang gửi ảnh…');
+      P.cust.uploadProof(ui.proof.file).then(proof => {
+        setBtn(true, 'Đang gửi đơn…');
+        return P.cust.submitOrder(lines, Object.assign({}, info, { file: co.file, note: co.note || '', payPct: allowed.includes(picked) ? picked : 100, code: co.code, proof }));
+      }).then(o => {
         P.setCart([]);
+        if (ui.proof) URL.revokeObjectURL(ui.proof.url);
+        ui.proof = null;
         setCo({ ship: info });
         P.setTrack(P.normPhone(info.phone));
         ui.busy = false;
         go('dat-xong-' + o.id);
       }, e => {
         ui.busy = false;
-        if (btn) { btn.disabled = false; btn.textContent = 'Đặt hàng'; }
-        P.ui.toast(P.errText(e));
+        setBtn(false, 'Đặt hàng');
+        P.ui.toast(e && e.message === 'not-image' ? 'File này không phải ảnh.' : P.errText(e));
       });
     }
   });

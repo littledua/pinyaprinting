@@ -101,6 +101,43 @@ $$;
 
 -- ==== Khách: đặt hàng ====
 -- Giá, tên sản phẩm, thời gian in đều lấy từ bảng sản phẩm, không tin dữ liệu khách gửi lên.
+
+-- Mã đơn giữ trước để khách chuyển khoản trước khi đặt (nội dung chuyển khoản = mã đơn)
+create table if not exists public.order_codes (
+  code text primary key,
+  created_at timestamptz not null default now(),
+  used_at timestamptz
+);
+alter table public.order_codes enable row level security;
+
+create or replace function public.reserve_order_code() returns text
+language plpgsql security definer set search_path = public as $$
+declare v_code text;
+begin
+  delete from public.order_codes where used_at is null and created_at < now() - interval '7 days';
+  v_code := 'PP-' || to_char(timezone('Asia/Ho_Chi_Minh', now()), 'YYMM') || '-' || lpad(nextval('public.order_seq')::text, 4, '0');
+  insert into public.order_codes (code) values (v_code);
+  return v_code;
+end $$;
+revoke all on function public.reserve_order_code() from public;
+grant execute on function public.reserve_order_code() to anon, authenticated;
+
+-- Kho ảnh chuyển khoản: khách (không cần tài khoản) chỉ được tải lên, admin mới xem/xóa được
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('payment-proofs', 'payment-proofs', false, 5242880, array['image/jpeg','image/png','image/webp','image/heic','image/heif'])
+on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "pinya_insert_payment_proofs" on storage.objects;
+create policy "pinya_insert_payment_proofs" on storage.objects for insert to anon, authenticated
+  with check (bucket_id = 'payment-proofs' and name like 'proofs/%');
+drop policy if exists "pinya_admin_read_payment_proofs" on storage.objects;
+create policy "pinya_admin_read_payment_proofs" on storage.objects for select to authenticated
+  using (bucket_id = 'payment-proofs' and (select public.is_admin()));
+drop policy if exists "pinya_admin_delete_payment_proofs" on storage.objects;
+create policy "pinya_admin_delete_payment_proofs" on storage.objects for delete to authenticated
+  using (bucket_id = 'payment-proofs' and (select public.is_admin()));
+
+
 create or replace function public.submit_order(p_order jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -115,7 +152,9 @@ declare
   v_file   text := btrim(coalesce(p_order->>'file', ''));
   v_note   text := btrim(coalesce(p_order->>'note', ''));
   v_city   text := btrim(coalesce(p_order->>'city', ''));
-  v_thr bigint; v_dep int; v_pay int; v_id text; v_cid text; v_order jsonb;
+  v_code   text := btrim(coalesce(p_order->>'code', ''));
+  v_proof  text := btrim(coalesce(p_order->>'proof', ''));
+  v_thr bigint; v_dep int; v_pay int; v_id text; v_cid text; v_order jsonb; v_first bigint;
 begin
   if v_name = '' or length(v_name) > 200 then raise exception 'Nhập họ tên người nhận.'; end if;
   if length(v_phone) < 9 or length(v_phone) > 15 then raise exception 'Số điện thoại chưa đúng.'; end if;
@@ -124,6 +163,15 @@ begin
   if length(v_social) > 500 or length(v_note) > 2000 or length(v_city) > 100 then raise exception 'Nội dung nhập quá dài.'; end if;
   if jsonb_typeof(p_order->'items') is distinct from 'array' or jsonb_array_length(p_order->'items') not between 1 and 30 then
     raise exception 'Giỏ hàng trống.';
+  end if;
+
+  -- Ảnh chụp chuyển khoản là bắt buộc: phải có trong kho payment-proofs và chưa dùng cho đơn khác
+  if v_proof !~ '^proofs/[A-Za-z0-9._-]{8,80}$'
+     or not exists (select 1 from storage.objects where bucket_id = 'payment-proofs' and name = v_proof) then
+    raise exception 'Tải lên ảnh chụp chuyển khoản trước khi đặt hàng.';
+  end if;
+  if exists (select 1 from public.records where kind = 'order' and data->>'proof' = v_proof) then
+    raise exception 'Ảnh chuyển khoản này đã dùng cho đơn khác.';
   end if;
 
   select data into v_set from public.records where kind = 'settings' and id = 'main';
@@ -154,7 +202,14 @@ begin
   v_pay := coalesce(nullif(p_order->>'payPct', '')::int, 100);
   if v_pay <> 100 and v_pay <> v_dep then v_pay := 100; end if;
 
-  v_id := 'PP-' || to_char(timezone('Asia/Ho_Chi_Minh', now()), 'YYMM') || '-' || lpad(nextval('public.order_seq')::text, 4, '0');
+  -- Dùng mã đơn đã giữ lúc khách chuyển khoản (nội dung chuyển khoản là mã này)
+  if v_code <> '' then
+    update public.order_codes set used_at = now() where code = v_code and used_at is null returning code into v_id;
+  end if;
+  if v_id is null then
+    v_id := 'PP-' || to_char(timezone('Asia/Ho_Chi_Minh', now()), 'YYMM') || '-' || lpad(nextval('public.order_seq')::text, 4, '0');
+  end if;
+  v_first := round(v_sub * v_pay / 100.0);
 
   select id into v_cid from public.records where kind = 'customer' and phone = v_phone limit 1;
   if v_cid is null then
@@ -170,11 +225,15 @@ begin
     'city', case when v_city = '' then 'Hà Nội' else v_city end,
     'file', v_file, 'note', v_note, 'payPct', v_pay, 'leadDays', v_lead,
     'extraFee', 0, 'extraNote', '', 'paid1', false, 'paid1Amount', null, 'balancePaid', false,
-    'paidNotice', null, 'produceStart', null, 'shipping', null, 'deliveredAt', null, 'factoryId', null,
-    'cancelReason', '', 'messages', '[]'::jsonb,
+    'paidNotice', v_now, 'proof', v_proof, 'payRef', nullif(v_code, ''), 'produceStart', null, 'shipping', null, 'deliveredAt', null, 'factoryId', null,
+    'cancelReason', '',
+    'messages', jsonb_build_array(jsonb_build_object('at', v_now, 'from', 'customer',
+      'text', 'Mình đã chuyển khoản ' || translate(to_char(v_first, 'FM999,999,999,999'), ',', '.') || ' ₫, nội dung ghi '
+              || coalesce(nullif(v_code, ''), v_id) || '. Ảnh chụp chuyển khoản gửi kèm đơn.')),
     'history', jsonb_build_array(jsonb_build_object('at', v_now, 'by', 'customer',
-      'text', 'Đặt hàng, chọn ' || case when v_pay >= 100 then 'thanh toán 100%' else 'đặt cọc ' || v_pay || '%' end)),
-    'unreadAdmin', 0, 'unreadCustomer', 0);
+      'text', 'Đặt hàng, chọn ' || case when v_pay >= 100 then 'thanh toán 100%' else 'đặt cọc ' || v_pay || '%' end),
+      jsonb_build_object('at', v_now, 'by', 'customer', 'text', 'Gửi ảnh chụp chuyển khoản')),
+    'unreadAdmin', 1, 'unreadCustomer', 0);
 
   insert into public.records (kind, id, data, phone) values ('order', v_id, v_order, v_phone);
   return public.public_order(v_order);

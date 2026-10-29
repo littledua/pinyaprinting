@@ -136,6 +136,23 @@
     if (keep) restore(keep);
     const thread = document.getElementById('thread');
     if (thread) thread.scrollTop = thread.scrollHeight;
+    loadProofs();
+  }
+
+  // Ảnh chuyển khoản nằm trong kho riêng: lấy link tạm rồi mới hiện (nhớ link 50 phút)
+  const proofUrls = new Map();
+  function loadProofs() {
+    app.querySelectorAll('[data-proof]').forEach(b => {
+      const path = b.dataset.proof;
+      const show = url => { b.innerHTML = `<img src="${esc(url)}" alt="Ảnh chụp chuyển khoản">`; b.dataset.src = url; };
+      const hit = proofUrls.get(path);
+      if (hit && hit.until > Date.now()) { show(hit.url); return; }
+      P.proofSrc(path).then(url => {
+        if (!url) { b.innerHTML = '<span class="muted">Không mở được ảnh.</span>'; return; }
+        proofUrls.set(path, { url, until: Date.now() + 50 * 60000 });
+        if (b.isConnected) show(url);
+      }, e => { b.innerHTML = `<span class="err">${esc(P.errText(e))}</span>`; });
+    });
   }
 
   // Menu kiểu Tiệm Dứa: máy tính là thanh bên cố định, điện thoại là ngăn kéo trượt từ trái (nút ☰ ở thanh trên).
@@ -427,8 +444,9 @@
           ${o.paidNotice ? `<p class="note-box warn">Khách báo đã chuyển khoản lúc ${fmt.dateTime(o.paidNotice)}. Kiểm tra tài khoản trước khi xác nhận.</p>`
             : old ? '<p class="note-box warn">Đơn đặt hơn 2 ngày chưa thanh toán. Nhắn khách nhắc chuyển khoản.</p>'
             : '<p class="muted">Khách vừa đặt hàng, đang chờ chuyển khoản.</p>'}
-          <dl class="kv" style="margin-top:12px"><dt>Số tiền</dt><dd class="num">${fmt.vnd(m.first)}</dd><dt>Nội dung</dt><dd>${esc(o.id)}</dd>
+          <dl class="kv" style="margin-top:12px"><dt>Số tiền</dt><dd class="num">${fmt.vnd(m.first)}</dd><dt>Nội dung</dt><dd>${esc(o.payRef || o.id)}</dd>
             <dt>Tài khoản</dt><dd>${esc(db.settings.bankName)} · ${esc(db.settings.bankNumber)}</dd></dl>
+          ${o.proof ? `<div class="proof-view"><p class="lbl">Ảnh chụp chuyển khoản của khách</p><button type="button" class="proof-thumb" data-proof="${esc(o.proof)}" aria-label="Phóng to ảnh chuyển khoản"><span class="muted">Đang tải ảnh…</span></button></div>` : ''}
           <p class="hint" style="margin-top:10px">Trước khi xác nhận, mở link file của khách để chắc file in được.</p>
           <div class="actions"><button class="btn btn-cta btn-sm" type="button" data-act="pay-ok">Đã nhận tiền, bắt đầu in</button>
             ${P.isUrl(o.file) ? `<a class="btn btn-ghost btn-sm" href="${esc(o.file)}" target="_blank" rel="noopener">Mở file của khách</a>` : ''}</div></section>`;
@@ -1470,6 +1488,8 @@
   }
 
   app.addEventListener('click', e => {
+    const pv = e.target.closest('[data-proof]');
+    if (pv && pv.dataset.src) { P.ui.lightbox(pv.dataset.src, 'Ảnh chụp chuyển khoản'); return; }
     const fl = e.target.closest('[data-filter]');
     if (fl) { ui.status = fl.dataset.filter; ui.customer = null; ui.cat = 'all'; ui.q = ''; if (location.hash === '#don-hang') { e.preventDefault(); render(); } return; }
 

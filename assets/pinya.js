@@ -811,10 +811,11 @@
     },
     // lines: [{ product, variant, qty }] từ cartLines(); info.payPct: 100 hoặc tỷ lệ cọc
     placeOrder(db, lines, info, customerId) {
-      db.seq = (db.seq || 0) + 1;
       const now = Date.now();
+      const reserved = info.code && !db.orders.some(x => x.id === info.code) ? info.code : '';
+      if (!reserved) db.seq = (db.seq || 0) + 1;
       const o = {
-        id: makeId(now, db.seq), customerId, status: 'cho_coc', createdAt: now, updatedAt: now,
+        id: reserved || makeId(now, db.seq), customerId, status: 'cho_coc', createdAt: now, updatedAt: now,
         items: lines.map(l => ({ productId: l.product.id, productName: l.product.name, catId: l.product.catId,
           variantId: l.variant.id, variantName: l.variant.name, price: l.variant.price, qty: l.qty })),
         name: info.name, phone: normPhone(info.phone), social: info.social || '', address: info.address || '', city: info.city || DEST[0],
@@ -825,6 +826,12 @@
         messages: [], history: [], unreadAdmin: 0, unreadCustomer: 0
       };
       log(o, 'Đặt hàng, chọn ' + payLabel(o).toLowerCase(), 'customer');
+      if (info.proof) {
+        // Khách đã chuyển khoản và gửi ảnh trước khi đặt
+        o.proof = info.proof; o.payRef = info.code || null; o.paidNotice = now;
+        log(o, 'Gửi ảnh chụp chuyển khoản', 'customer');
+        act.sendMessage(db, o, 'customer', 'Mình đã chuyển khoản ' + fmt.vnd(money(o).first) + ', nội dung ghi ' + (info.code || o.id) + '. Ảnh chụp chuyển khoản gửi kèm đơn.');
+      }
       db.orders.push(o);
       return o;
     },
@@ -1262,13 +1269,34 @@
       if (!CLOUD) return update(d => { const c = act.upsertCustomer(d, info); return act.placeOrder(d, lines, info, c.id); });
       const { data, error } = await sb.rpc('submit_order', { p_order: {
         name: info.name, phone: normPhone(info.phone), social: info.social || '', address: info.address || '', city: info.city || '',
-        file: info.file || '', note: info.note || '', payPct: info.payPct,
+        file: info.file || '', note: info.note || '', payPct: info.payPct, code: info.code || '', proof: info.proof || '',
         items: lines.map(l => ({ productId: l.pid, variantId: l.vid, qty: l.qty }))
       } });
       if (error) throw error;
       const db = load();
       db.orders = (db.orders || []).filter(o => o.id !== data.id).concat(data);
       return data;
+    },
+    // Giữ trước mã đơn để khách ghi vào nội dung chuyển khoản (đơn đặt sau khi đã chuyển)
+    async reserveCode() {
+      if (!CLOUD) {
+        let code = '';
+        update(d => { d.seq = (d.seq || 0) + 1; code = makeId(Date.now(), d.seq); });
+        return code;
+      }
+      const { data, error } = await sb.rpc('reserve_order_code');
+      if (error) throw error;
+      return data;
+    },
+    // Ảnh chụp chuyển khoản: nén lại rồi tải lên kho riêng (chỉ admin xem). Chế độ thử: giữ ảnh trong bộ nhớ.
+    async uploadProof(file) {
+      const dataUrl = await fileToDataUrl(file, CLOUD ? 1600 : 900, 0.82);
+      if (!CLOUD) return dataUrl;
+      const blob = await (await fetch(dataUrl)).blob();
+      const path = 'proofs/' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12) + '.jpg';
+      const { error } = await sb.storage.from('payment-proofs').upload(path, blob, { contentType: 'image/jpeg' });
+      if (error) throw error;
+      return path;
     },
     // action: message | notify_paid | set_file | cancel | mark_read
     async action(id, action, payload) {
@@ -1349,6 +1377,16 @@
   };
 
   // Ảnh sản phẩm: lên kho ảnh của Supabase, trong sản phẩm chỉ lưu địa chỉ ảnh
+  // Admin xem ảnh chuyển khoản: link tạm 1 giờ từ kho riêng
+  async function proofSrc(path) {
+    if (!path) return '';
+    if (/^data:/.test(path)) return path;
+    if (!CLOUD || !sb) return '';
+    const { data, error } = await sb.storage.from('payment-proofs').createSignedUrl(path, 3600);
+    if (error) throw error;
+    return data.signedUrl;
+  }
+
   async function uploadImage(dataUrl) {
     if (!CLOUD || !adminOk) return dataUrl;
     const blob = await (await fetch(dataUrl)).blob();
@@ -1479,7 +1517,7 @@
     SHOW_KEYS, THEMES, ACCENTS, MODES, FONTS, SIZE_NAMES, baseLook, normLook, applyLook, lookOf, showSection, catVisible, visibleCategories,
     feeShares, feesOfJob, jobFeeTotal, jobFullCost,
     libGroup, groupName, groupOptions, combos, skuKey, rebuildSkus, variantsFromSkus, pickVariant,
-    isCloud: CLOUD, init, auth, cust, uploadImage, imageImport, errText, pendingCount,
+    isCloud: CLOUD, init, auth, cust, uploadImage, proofSrc, imageImport, errText, pendingCount,
     syncState: () => syncState, loadError: () => loadError,
     act, ui: { toast, copyText, selectText, lightbox, fileToDataUrl }
   };
