@@ -21,6 +21,7 @@
   .sh-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand tools" "nav nav";padding-top:10px}
   .sh-nav{justify-content:flex-start;margin-inline:-6px;padding-bottom:8px}
 }
+@media (min-width:0px){.sh-track span{display:none}.sh-track{padding:10px;width:44px;height:44px;justify-content:center}}
 @media (max-width:420px){.sh-track span{display:none}.sh-track{padding:10px}}
 
 /* Giới thiệu */

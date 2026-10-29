@@ -139,7 +139,7 @@
       </nav>
       <div class="sh-tools">
         <a class="sh-search" href="#tim-kiem" aria-label="Tìm sản phẩm"${cur(r.view === 'search')}>${ICON.search}</a>
-        ${P.showSection(db, 'navTrack') ? `<a class="sh-track" href="#theo-doi"${cur(r.view === 'track' || r.view === 'order')}>${ICON.track}<span>Theo dõi đơn</span></a>` : ''}
+        ${P.showSection(db, 'navTrack') ? `<a class="sh-track" href="#theo-doi" title="Theo dõi đơn" aria-label="Theo dõi đơn"${cur(r.view === 'track' || r.view === 'order')}>${ICON.track}<span>Theo dõi đơn</span></a>` : ''}
         <a class="cart-btn" href="#gio-hang" aria-label="Giỏ hàng${n ? ', ' + n + ' sản phẩm' : ''}"${cur(['cart', 'file', 'pay'].includes(r.view))}>${ICON.bag}${n ? `<span class="count">${n}</span>` : ''}</a>
       </div>
     </div></header>`;
