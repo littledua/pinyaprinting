@@ -491,3 +491,5 @@ a.soc:hover{text-decoration:underline}
 .imgsort-bar .icon-btn:hover{border-color:var(--sky-deep);color:var(--sky-deep)}
 .imgsort-bar .icon-btn.danger:hover{border-color:var(--off-fg);color:var(--off-fg)}
 .imgsort-cover{justify-self:center;padding:4px 2px;font-size:.84rem}
+.qr-prev{display:flex;align-items:center;gap:14px;margin-top:12px;padding:12px;border-radius:14px;background:var(--sky-wash)}
+.qr-prev img{flex:none;width:120px;height:120px;border-radius:10px;background:#fff}

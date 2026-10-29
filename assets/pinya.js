@@ -477,6 +477,27 @@
     if (mq.addEventListener) mq.addEventListener('change', again);
   } catch (e) {}
 
+  // ==== Mã QR chuyển khoản VietQR (img.vietqr.io, miễn phí, không cần khóa) ====
+  // Danh sách ngân hàng nhận chuyển khoản nhanh: [tên ngắn, mã BIN, mã ngân hàng] (nguồn: api.vietqr.io/v2/banks)
+  const BANKS = [["VietinBank","970415","ICB"],["Vietcombank","970436","VCB"],["BIDV","970418","BIDV"],["Agribank","970405","VBA"],["OCB","970448","OCB"],["MBBank","970422","MB"],["Techcombank","970407","TCB"],["ACB","970416","ACB"],["VPBank","970432","VPB"],["TPBank","970423","TPB"],["Sacombank","970403","STB"],["HDBank","970437","HDB"],["VietCapitalBank","970454","VCCB"],["SCB","970429","SCB"],["VIB","970441","VIB"],["SHB","970443","SHB"],["Eximbank","970431","EIB"],["MSB","970426","MSB"],["CAKE","546034","CAKE"],["Ubank","546035","Ubank"],["Timo","963388","TIMO"],["SaigonBank","970400","SGICB"],["BacABank","970409","BAB"],["PVcomBank Pay","971133","PVDB"],["MoMo","971025","momo"],["PVcomBank","970412","PVCB"],["MBV","970414","MBV"],["NCB","970419","NCB"],["ShinhanBank","970424","SHBVN"],["ABBANK","970425","ABB"],["VietABank","970427","VAB"],["NamABank","970428","NAB"],["PGBank","970430","PGB"],["VietBank","970433","VIETBANK"],["BaoVietBank","970438","BVB"],["SeABank","970440","SEAB"],["COOPBANK","970446","COOPBANK"],["LPBank","970449","LPB"],["KienLongBank","970452","KLB"],["KBank","668888","KBank"],["ZaloPay","971101","ZALOPAY"],["MVAS","971032","MVAS"],["IndovinaBank","970434","IVB"],["CIMB","422589","CIMB"],["CBBank","970444","CBB"],["Woori","970457","WVN"],["KookminHN","970462","KBHN"],["KookminHCM","970463","KBHCM"]];
+  const bankKey = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  function bankOf(name) {
+    const k = bankKey(name);
+    if (!k) return null;
+    return BANKS.find(b => bankKey(b[0]) === k || bankKey(b[2]) === k || b[1] === k) || null;
+  }
+  // Trả về link ảnh QR có sẵn số tiền và nội dung; '' nếu thiếu ngân hàng hoặc số tài khoản
+  function vietQr(s, amount, memo) {
+    const b = bankOf(s && s.bankName);
+    const acc = String((s && s.bankNumber) || '').replace(/\s/g, '');
+    if (!b || !/^[A-Za-z0-9]{3,19}$/.test(acc)) return '';
+    const q = [];
+    if (amount > 0) q.push('amount=' + Math.round(amount));
+    if (memo) q.push('addInfo=' + encodeURIComponent(String(memo).replace(/[^A-Za-z0-9 \-]/g, '').slice(0, 50)));
+    if (s.bankHolder) q.push('accountName=' + encodeURIComponent(s.bankHolder));
+    return 'https://img.vietqr.io/image/' + b[1] + '-' + acc + '-compact.png' + (q.length ? '?' + q.join('&') : '');
+  }
+
   const lookOf = db => normLook(db && db.settings && db.settings.look);
   const showSection = (db, key) => lookOf(db).show[key] !== false;
   const catVisible = (db, id) => !lookOf(db).hiddenCats.includes(id);
@@ -1454,6 +1475,7 @@
     getCart, setCart, addToCart, cartLines, getTrack, setTrack, ordersByPhone,
     findOrder, findCustomer, findFactory, findProduct, findCategory, findCustomerByPhone,
     LOGO, loadLogo, brandMark, hasLogo: () => !!logoSrc(), logoSrc,
+    BANKS, bankOf, vietQr,
     SHOW_KEYS, THEMES, ACCENTS, MODES, FONTS, SIZE_NAMES, baseLook, normLook, applyLook, lookOf, showSection, catVisible, visibleCategories,
     feeShares, feesOfJob, jobFeeTotal, jobFullCost,
     libGroup, groupName, groupOptions, combos, skuKey, rebuildSkus, variantsFromSkus, pickVariant,

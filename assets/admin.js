@@ -1332,7 +1332,7 @@
         <h2 class="sec-title">Cửa hàng</h2>
         <div class="form-grid">
           ${f('s-name', 'Tên shop', s.shopName)}
-          ${f('s-tagline', 'Dòng giới thiệu ngắn', s.tagline, ' placeholder="VD: In ấn tại xưởng, giao tận tay"')}
+          ${f('s-tagline', 'Khẩu hiệu dưới tên shop', s.tagline, ' placeholder="VD: In ấn tại xưởng, giao tận tay"')}
           <div class="field full"><label for="s-about">Mô tả shop</label><textarea id="s-about" rows="5">${esc(s.about)}</textarea><p class="hint">Hiện ở trang Giới thiệu. Xuống dòng để tách đoạn.</p></div>
         </div>
         <h2 class="sec-title">Liên hệ</h2>
@@ -1353,10 +1353,16 @@
         <p class="hint" style="margin-top:8px">Hiện tại: đơn dưới ${esc(fmt.short(s.payThreshold))} trả 100% hoặc cọc ${s.depositLow}%; đơn từ ${esc(fmt.short(s.payThreshold))} trả 100% hoặc cọc ${s.depositHigh}%.</p>
         <h2 class="sec-title">Tài khoản nhận tiền</h2>
         <div class="form-grid three">
-          ${f('s-bank', 'Ngân hàng', s.bankName)}
+          ${f('s-bank', 'Ngân hàng', s.bankName, ' list="bank-list" autocomplete="off" placeholder="Gõ để chọn, VD: Vietcombank"')}
+          <datalist id="bank-list">${P.BANKS.map(b => `<option value="${esc(b[0])}">${esc(b[2])}</option>`).join('')}</datalist>
           ${f('s-acc', 'Số tài khoản', s.bankNumber, ' inputmode="numeric"')}
           ${f('s-holder', 'Chủ tài khoản', s.bankHolder)}
         </div>
+        ${(() => {
+          const qr = P.vietQr(s, 0, 'PP-THU');
+          return qr ? `<div class="qr-prev"><img src="${esc(qr)}" alt="Mã QR thử của tài khoản đang lưu" width="120" height="120" onerror="this.parentNode.innerHTML='<p class=hint>Chưa tải được mã QR thử. Kiểm tra lại ngân hàng và số tài khoản.</p>'"><p class="hint">Mã QR chuyển khoản (VietQR) hiện cho khách ở trang đặt xong và trang đơn, có sẵn số tiền và nội dung là mã đơn. Đây là mã thử theo thông tin đang lưu: quét bằng app ngân hàng để kiểm tra đúng tên tài khoản.</p></div>`
+            : `<p class="hint" style="margin-top:10px">Chọn ngân hàng trong danh sách gợi ý và nhập số tài khoản để khách có mã QR chuyển khoản.</p>`;
+        })()}
         <h2 class="sec-title">Quản trị</h2>
         <div class="form-grid">${f('s-admin', 'Tên hiển thị khi nhắn khách', s.adminName)}${P.isCloud ? '' : f('s-email', 'Email đăng nhập', s.adminEmail, ' type="email"')}</div>
         <div class="actions"><button class="btn btn-cta" type="submit">Lưu cài đặt</button></div>

@@ -120,6 +120,7 @@
     root.innerHTML = header(db, r) + '<main id="main">' + body + '</main>' + footer(db);
     document.title = (title ? title + ' · ' : '') + db.settings.shopName;
     if (keep) restore(keep);
+    bindGallery();
     if (document.activeElement && document.activeElement.id === 'find-q' && r.view !== 'search') showDrop(db);
     const thread = document.getElementById('thread');
     if (thread) thread.scrollTop = thread.scrollHeight;
@@ -355,37 +356,76 @@
     if (ui.sel.qty < min) ui.sel.qty = min;
     const imgs = p.images || [];
     if (ui.sel.img >= imgs.length) ui.sel.img = 0;
-    const main = imgs.length ? `<img class="main" src="${esc(imgs[ui.sel.img])}" alt="${esc(p.name)}">` : P.thumb(db, p, 'main');
+    const slides = imgs.length
+      ? imgs.map((src, i) => `<figure class="slide"><img src="${esc(src)}" alt="${esc(p.name)}${imgs.length > 1 ? ', ảnh ' + (i + 1) : ''}"${i ? ' loading="lazy"' : ''}></figure>`).join('')
+      : `<figure class="slide">${P.thumb(db, p, 'main')}</figure>`;
+    const total = v ? v.price * ui.sel.qty : 0;
+    const vname = v ? (grouped ? v.opts.join(' · ') : v.name) : '';
 
-    return `<div class="wrap page">
-      <nav class="crumbs" aria-label="Đường dẫn"><a href="#gioi-thieu">Giới thiệu</a><span>/</span>
+    return `<div class="wrap page pd-page">
+      <nav class="crumbs pd-crumbs" aria-label="Đường dẫn"><a href="#gioi-thieu">Trang chủ</a><span>/</span>
         ${c ? `<a href="#dm-${esc(c.id)}">${esc(c.name)}</a><span>/</span>` : ''}<span aria-current="page">${esc(p.name)}</span></nav>
       <div class="pdetail">
-        <div class="pgal">${main}
-          ${imgs.length > 1 ? `<div class="thumbs">${imgs.map((src, i) => `<button type="button" data-act="img" data-i="${i}" aria-pressed="${i === ui.sel.img}" aria-label="Xem ảnh ${i + 1}"><img src="${esc(src)}" alt=""></button>`).join('')}</div>` : ''}
+        <div class="pgal">
+          <div class="gal-track" id="gal" tabindex="0" aria-label="Ảnh sản phẩm, vuốt ngang để xem">${slides}</div>
+          ${imgs.length > 1 ? `<span class="gal-n" id="gal-n" aria-hidden="true">${ui.sel.img + 1}/${imgs.length}</span>
+            <button type="button" class="gal-arrow prev round-btn" data-act="gal" data-d="-1" aria-label="Ảnh trước">${ICON.left}</button>
+            <button type="button" class="gal-arrow next round-btn" data-act="gal" data-d="1" aria-label="Ảnh sau">${ICON.right}</button>
+            <div class="thumbs">${imgs.map((src, i) => `<button type="button" data-act="img" data-i="${i}" aria-pressed="${i === ui.sel.img}" aria-label="Xem ảnh ${i + 1}"><img src="${esc(src)}" alt=""></button>`).join('')}</div>` : ''}
         </div>
         <div class="pinfo">
-          <div>${P.catTag(db, p.catId)}<h1>${esc(p.name)}</h1></div>
-          ${v ? `<p class="pprice">${fmt.vnd(v.price)}</p>` : '<p class="muted">Sản phẩm đang cập nhật giá.</p>'}
-          ${p.desc ? `<p class="pdesc">${esc(p.desc)}</p>` : ''}
-          ${v && grouped ? p.groups.map((g, gi) => `<div><p class="lbl">${esc(g.name)}: <b>${esc(v.opts[gi])}</b></p>
+          <div class="pd-head">${P.catTag(db, p.catId)}<h1>${esc(p.name)}</h1></div>
+          ${v ? `<div class="pd-price"><span class="pprice">${fmt.vnd(v.price)}</span>${min > 1 ? `<span class="pop-pill">Tối thiểu ${fmt.num(min)}</span>` : ''}</div>` : '<p class="muted">Sản phẩm đang cập nhật giá.</p>'}
+          ${p.leadDays ? `<p class="pd-lead">${ICON.clock}In khoảng ${esc(p.leadDays)} ngày, cộng thời gian vận chuyển</p>` : ''}
+          ${v && grouped ? p.groups.map((g, gi) => `<div class="pd-opt"><p class="lbl">${esc(g.name)}: <b>${esc(v.opts[gi])}</b></p>
             <div class="vchips" role="group" aria-label="${esc(g.name)}">${g.values.filter(val => p.variants.some(x => x.opts[gi] === val)).map(val =>
               `<button type="button" class="vchip" data-act="opt" data-g="${gi}" data-v="${esc(val)}" aria-pressed="${v.opts[gi] === val}">${esc(val)}</button>`).join('')}</div></div>`).join('') : ''}
-          ${v && !grouped ? `<div><p class="lbl">Phân loại: <b>${esc(v.name)}</b></p>
+          ${v && !grouped ? `<div class="pd-opt"><p class="lbl">Phân loại: <b>${esc(v.name)}</b></p>
             <div class="vchips" role="group" aria-label="Chọn phân loại">${p.variants.map(x =>
-              `<button type="button" class="vchip" data-act="variant" data-id="${esc(x.id)}" aria-pressed="${x.id === v.id}">${esc(x.name)}<small>${fmt.vnd(x.price)}${(+x.minQty || 1) > 1 ? ' · tối thiểu ' + fmt.num(x.minQty) : ''}</small></button>`).join('')}</div></div>` : ''}
+              `<button type="button" class="vchip" data-act="variant" data-id="${esc(x.id)}" aria-pressed="${x.id === v.id}">${esc(x.name)}<small>${fmt.vnd(x.price)}${(+x.minQty || 1) > 1 ? ' · từ ' + fmt.num(x.minQty) : ''}</small></button>`).join('')}</div></div>` : ''}
           ${v ? `<div class="qty-row"><span class="lbl" id="q-lbl">Số lượng</span>
             <div class="qty"><button type="button" data-act="qty-" aria-label="Giảm số lượng">−</button><input id="pq" inputmode="numeric" autocomplete="off" value="${ui.sel.qty}" aria-labelledby="q-lbl"><button type="button" data-act="qty+" aria-label="Tăng số lượng">+</button></div>
-            ${min > 1 ? `<span class="hint">Tối thiểu ${fmt.num(min)}</span>` : ''}
-            <span class="hint" id="pq-total" aria-live="polite">Thành tiền ${fmt.vnd(v.price * ui.sel.qty)}</span></div>
-          <div class="pbtns"><button class="btn btn-ghost" type="button" data-act="add">Thêm vào giỏ</button><button class="btn btn-cta" type="button" data-act="buy">Mua ngay</button></div>` : ''}
+            <span class="hint" id="pq-total" aria-live="polite">Thành tiền <b>${fmt.vnd(total)}</b></span></div>
+          <div class="pbtns"><button class="btn btn-pop" type="button" data-act="add">${ICON.bag}Thêm vào giỏ</button><button class="btn btn-cta" type="button" data-act="buy">Mua ngay</button></div>` : ''}
+          ${p.desc ? `<section class="pd-box"><h2>Mô tả</h2><p class="pdesc">${esc(p.desc)}</p></section>` : ''}
           ${P.showSection(db, 'pnotes') ? `<ul class="pnotes">
-            ${p.leadDays ? `<li>In khoảng ${esc(p.leadDays)} ngày, cộng thời gian vận chuyển</li>` : ''}
             <li>Bạn gửi file thiết kế qua link Google Drive ở bước đặt hàng</li>
             <li>${esc(payRule(db.settings))}</li>
           </ul>` : ''}
         </div>
-      </div></div>`;
+      </div></div>
+      ${v ? `<div class="float-bar" role="region" aria-label="Đặt nhanh"><div class="fb-sum"><b id="pq-total2">${fmt.vnd(total)}</b><small>${fmt.num(ui.sel.qty)} · ${esc(vname)}</small></div>
+        <button class="fb-cart" type="button" data-act="add" aria-label="Thêm vào giỏ">${ICON.bag}</button><button class="btn btn-cta" type="button" data-act="buy">Mua ngay</button></div>` : ''}`;
+  }
+
+  function setTotals(v) {
+    if (!v) return;
+    const s = fmt.vnd(v.price * clampQ(ui.sel.qty, 1));
+    const out = document.getElementById('pq-total'); if (out) out.innerHTML = 'Thành tiền <b>' + s + '</b>';
+    const o2 = document.getElementById('pq-total2'); if (o2) o2.textContent = s;
+    const sm = document.querySelector('.fb-sum small'); if (sm) sm.textContent = sm.textContent.replace(/^[\d.]+/, fmt.num(clampQ(ui.sel.qty, 1)));
+  }
+  // Ảnh sản phẩm: vuốt ngang (scroll-snap); số đếm và ảnh nhỏ đi theo ảnh đang xem
+  function galGo(i, smooth) {
+    const g = document.getElementById('gal');
+    if (!g) return;
+    g.scrollTo({ left: i * g.clientWidth, behavior: smooth && !reduceMotion ? 'smooth' : 'instant' });
+  }
+  function bindGallery() {
+    const g = document.getElementById('gal');
+    if (!g) return;
+    if (ui.sel && ui.sel.img) galGo(ui.sel.img, false);
+    let tick = 0;
+    g.addEventListener('scroll', () => {
+      cancelAnimationFrame(tick);
+      tick = requestAnimationFrame(() => {
+        const i = Math.round(g.scrollLeft / Math.max(1, g.clientWidth));
+        if (!ui.sel || i === ui.sel.img) return;
+        ui.sel.img = i;
+        const n = document.getElementById('gal-n'); if (n) n.textContent = (i + 1) + '/' + g.children.length;
+        root.querySelectorAll('.thumbs [data-act="img"]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.i === i)));
+      });
+    }, { passive: true });
   }
 
   function currentVariant() {
@@ -550,11 +590,16 @@
     const s = db.settings;
     const line = (label, id, value, copyValue) =>
       `<dt>${label}</dt><dd class="copy-line"><b id="${id}">${esc(value)}</b><button class="copy-mini" type="button" data-copy-value="${esc(copyValue || value)}" data-copy-target="${id}">Sao chép</button></dd>`;
-    return `<dl class="kv" style="margin-top:14px"><dt>Ngân hàng</dt><dd>${esc(s.bankName)}</dd>
+    const qr = P.vietQr(s, amount, memo);
+    const kv = `<dl class="kv"><dt>Ngân hàng</dt><dd>${esc(s.bankName)}</dd>
       ${line('Số tài khoản', 'cp-acc', s.bankNumber, String(s.bankNumber).replace(/\s/g, ''))}
       <dt>Chủ tài khoản</dt><dd>${esc(s.bankHolder)}</dd>
       ${line('Số tiền', 'cp-amt', fmt.vnd(amount), String(Math.round(amount)))}
       ${line('Nội dung', 'cp-memo', memo)}</dl>`;
+    // QR VietQR có sẵn số tiền và nội dung; tải không được thì ẩn khung, khách vẫn chuyển theo thông tin bên cạnh
+    return `<div class="pay-qr${qr ? '' : ' no-qr'}">${qr ? `<figure class="qr-box"><span class="qr-tag">Quét để chuyển</span>
+        <img src="${esc(qr)}" alt="Mã QR chuyển khoản ${esc(fmt.vnd(amount))} vào ${esc(s.bankName)} ${esc(s.bankNumber)}, nội dung ${esc(memo)}" width="200" height="200" onerror="this.closest('.pay-qr').classList.add('no-qr');this.parentNode.remove()">
+        <figcaption>Mở app ngân hàng, chọn quét mã QR. Số tiền và nội dung đã điền sẵn.</figcaption></figure>` : ''}${kv}</div>`;
   }
 
   function viewDone(db, id) {
@@ -820,7 +865,8 @@
     const a = t.dataset.act;
     const i = +t.dataset.i;
     switch (a) {
-      case 'img': ui.sel.img = i; render(); return;
+      case 'img': galGo(i, true); return;
+      case 'gal': { const g = document.getElementById('gal'); if (g) galGo(Math.max(0, Math.min(g.children.length - 1, (ui.sel.img || 0) + (+t.dataset.d))), true); return; }
       case 'opt': {
         const { p, v } = currentVariant();
         if (!p || !v) return;
@@ -886,8 +932,7 @@
     if (el.id === 'pq') {
       ui.sel.qty = parseInt(el.value.replace(/\D/g, ''), 10) || 0;
       const { v } = currentVariant();
-      const out = document.getElementById('pq-total');
-      if (v && out) out.textContent = 'Thành tiền ' + fmt.vnd(v.price * clampQ(ui.sel.qty, 1));
+      setTotals(v);
       return;
     }
     if (el.id === 'find-q') {
@@ -909,8 +954,7 @@
       const { v } = currentVariant();
       ui.sel.qty = clampQ(ui.sel.qty, v ? (+v.minQty || 1) : 1);
       el.value = ui.sel.qty;
-      const out = document.getElementById('pq-total');
-      if (v && out) out.textContent = 'Thành tiền ' + fmt.vnd(v.price * ui.sel.qty);
+      setTotals(v);
       return;
     }
     if (el.classList.contains('cq')) {
