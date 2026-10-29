@@ -241,19 +241,28 @@
     const pipe = STATUS_ORDER.filter(s => s !== 'huy').map(s =>
       `<a href="#don-hang" data-filter="${s}" class="${s === 'cho_coc' && notified.length ? 'act' : ''}"><b>${by(s).length}</b><span>${STATUSES[s].admin}</span></a>`).join('');
 
-    return `<div class="page-head"><div><h1>Tổng quan</h1><p>${esc(today.charAt(0).toUpperCase() + today.slice(1))}</p></div>
-        <a class="btn btn-cta btn-sm" href="#don-hang" data-filter="todo">Xem việc cần làm</a></div>
-      <div class="tiles">
-        <a class="tile${notified.length ? ' hot' : ''}" href="#don-hang" data-filter="cho_coc"><span class="lbl">Chờ thanh toán</span><b>${deposit.length}</b>
-          ${notified.length ? `<span class="flag">${notified.length} khách báo đã chuyển</span>` : '<span class="sub">Đơn mới đặt</span>'}</a>
-        <a class="tile" href="#don-hang" data-filter="san_xuat"><span class="lbl">Đang in</span><b>${by('san_xuat').length}</b><span class="sub">Đã nhận tiền</span></a>
-        <a class="tile" href="#don-hang" data-filter="van_chuyen"><span class="lbl">Đang vận chuyển</span><b>${by('van_chuyen').length}</b><span class="sub">${running.length} đơn đang chạy</span></a>
-        <a class="tile${os.some(o => o.status === 'da_giao' && !o.balancePaid) ? ' hot' : ''}" href="#don-hang" data-filter="todo"><span class="lbl">Việc cần làm</span><b>${tasks.length}</b><span class="sub">Xác nhận tiền, thu nốt, tin nhắn</span></a>
-      </div>
-      <div class="tiles three" style="margin-top:14px">
-        <div class="tile"><span class="lbl">Doanh số đã chốt · 30 ngày</span><b>${fmt.vnd(sales)}</b><span class="sub">${recent.length} đơn đã thanh toán</span></div>
-        <div class="tile"><span class="lbl">Tiền đã nhận · 30 ngày</span><b>${fmt.vnd(deps)}</b></div>
-        <div class="tile"><span class="lbl">Còn phải thu</span><b>${fmt.vnd(debt)}</b><span class="sub">Phần còn lại của các đơn đã chạy</span></div>
+    const TI = d => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    const cards = [
+      ['paidnote', 'Khách báo đã chuyển', 'Kiểm tra tiền rồi xác nhận', 'red', TI('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h3"/>')],
+      ['noprint', 'Chưa đặt in', 'Đã nhận tiền, chưa gửi xưởng', 'orange', TI('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>')],
+      ['unread', 'Tin nhắn mới', 'Khách đang chờ trả lời', 'blue', TI('<path d="M4 5h16v11H9l-5 4z"/>')],
+      ['late', 'Quá ngày dự kiến', 'Đang in, đã trễ hẹn', 'purple', TI('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')],
+      ['collect', 'Thu phần còn lại', 'Đã giao, chưa thu đủ', 'green', TI('<path d="M12 3v18M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6"/>')],
+      ['remind', 'Nhắc thanh toán', 'Đặt hơn 2 ngày chưa chuyển', 'yellow', TI('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21h4"/>')]
+    ].map(([k, label, sub, tone, icon]) => {
+      const n = os.filter(o => FILTERS[k].test(o, db)).length;
+      return `<a class="tcard${n ? '' : ' zero'}" data-tone="${tone}" href="#don-hang" data-filter="${k}"><span class="tc-ic">${icon}</span><b>${n}</b><span class="tc-l">${label}</span><span class="tc-s">${sub}</span></a>`;
+    }).join('');
+
+    return `<div class="page-head"><div><h1>Tổng quan</h1><p>${esc(db.settings.shopName)} · ${esc(today.charAt(0).toUpperCase() + today.slice(1))}</p></div>
+        <a class="btn btn-cta btn-sm" href="#don-hang" data-filter="todo">Xem ${tasks.length} việc cần làm</a></div>
+      <h2 class="sec-title">Việc cần làm</h2>
+      <div class="tcards">${cards}</div>
+      <h2 class="sec-title" style="margin-top:26px">Tiền · 30 ngày</h2>
+      <div class="money-row">
+        <div class="mcell"><span>Doanh số đã chốt</span><b>${fmt.vnd(sales)}</b><small>${recent.length} đơn đã thanh toán</small></div>
+        <div class="mcell"><span>Tiền đã nhận</span><b>${fmt.vnd(deps)}</b></div>
+        <div class="mcell"><span>Còn phải thu</span><b>${fmt.vnd(debt)}</b><small>Phần còn lại của các đơn đã chạy</small></div>
       </div>
       <h2 class="sec-title" style="margin-top:28px">Đơn theo trạng thái</h2>
       <div class="pipe">${pipe}</div>
@@ -281,6 +290,14 @@
     running: { label: 'Đang in, vận chuyển', test: o => ['san_xuat', 'van_chuyen'].includes(o.status) }
   };
   STATUS_ORDER.forEach(s => { FILTERS[s] = { label: STATUSES[s].admin, test: o => o.status === s }; });
+  // Các ô "Việc cần làm" ở Tổng quan mở đúng danh sách này
+  Object.assign(FILTERS, {
+    paidnote: { label: 'Khách báo đã chuyển', test: o => o.status === 'cho_coc' && !!o.paidNotice },
+    remind: { label: 'Nhắc thanh toán', test: o => o.status === 'cho_coc' && !o.paidNotice && Date.now() - o.createdAt > 2 * DAY },
+    late: { label: 'Quá ngày dự kiến', test: o => o.status === 'san_xuat' && P.expectedDone(o) && Date.now() > P.expectedDone(o) },
+    collect: { label: 'Thu phần còn lại', test: o => o.status === 'da_giao' && !o.balancePaid },
+    unread: { label: 'Tin nhắn mới', test: o => !!o.unreadAdmin }
+  });
 
   function viewOrders(db) {
     let list = db.orders.slice().sort((a, b) => b.updatedAt - a.updatedAt);
@@ -294,6 +311,7 @@
     const shown = list.filter(o => FILTERS[ui.status].test(o, db));
     const chipKeys = ['all', 'todo'].concat(counts.noprint || ui.status === 'noprint' ? ['noprint'] : [], STATUS_ORDER.filter(s => counts[s] || ui.status === s));
     if (ui.status === 'running') chipKeys.splice(2, 0, 'running');
+    if (['paidnote', 'remind', 'late', 'collect', 'unread'].includes(ui.status)) chipKeys.splice(2, 0, ui.status);
     const cust = ui.customer ? P.findCustomer(db, ui.customer) : null;
 
     // Chỉ giữ các đơn đang chọn mà vẫn còn hiện trong danh sách
@@ -316,8 +334,7 @@
       return `<tr data-href="#don-${esc(o.id)}"${on ? ' class="picked"' : ''}>
         <td class="pick"><input type="checkbox" class="o-pick" data-nokeep="1" data-id="${esc(o.id)}"${on ? ' checked' : ''} aria-label="Chọn đơn ${esc(o.id)}"></td>
         <td class="id"><a href="#don-${esc(o.id)}">${esc(o.id)}</a>${o.unreadAdmin ? '<span class="dot-new" title="Tin nhắn mới"></span>' : ''}<span class="sub">${fmt.date(o.createdAt)}</span></td>
-        <td>${esc(o.name)}<span class="sub">${esc(fmt.phone(o.phone))}</span></td>
-        <td>${soc ? (P.isUrl(o.social) ? `<a class="soc" href="${esc(o.social)}" target="_blank" rel="noopener" title="${esc(o.social)}">${esc(soc)}</a>` : `<span class="soc">${esc(soc)}</span>`) : '<span class="muted">—</span>'}</td>
+        <td class="cust"><b>${esc(o.name)}</b><span class="sub">${esc(fmt.phone(o.phone))}${soc ? ' · ' + (P.isUrl(o.social) ? `<a class="soc" href="${esc(o.social)}" target="_blank" rel="noopener" title="${esc(o.social)}">${esc(soc)}</a>` : `<span class="soc">${esc(soc)}</span>`) : ''}</span></td>
         <td>${P.pill(o, 'admin')}${needs.length ? `<span class="sub${needs[0] === 'Chưa đặt in' ? ' warn-t' : ''}">${esc(needs[0])}</span>` : ''}${job ? `<span class="sub">In: ${esc(job.code)} · ${esc(P.jobStatus(job).label)}</span>` : ''}</td>
         <td class="items-cell">${items}</td>
         <td class="r"><b>${fmt.vnd(m.total)}</b> ${payTag}<span class="sub">${esc(payNote)}</span></td>
@@ -335,7 +352,7 @@
       <div class="filters" role="group" aria-label="Lọc theo trạng thái">${chipKeys.map(k =>
         `<button class="chip-btn" type="button" data-act="status" data-v="${k}" aria-pressed="${ui.status === k}">${FILTERS[k].label} <span class="n">${counts[k]}</span></button>`).join('')}</div>
       ${shown.length ? `<div class="tbl-wrap tbl-scroll"><table class="tbl orders">
-        <thead><tr><th class="pick"><input type="checkbox" id="o-all" data-nokeep="1"${allPicked ? ' checked' : ''} aria-label="Chọn tất cả ${shown.length} đơn đang hiện"></th><th>Mã đơn</th><th>Khách hàng</th><th>Mạng xã hội</th><th>Trạng thái</th><th>Sản phẩm</th><th class="r">Tổng đơn</th></tr></thead>
+        <thead><tr><th class="pick"><input type="checkbox" id="o-all" data-nokeep="1"${allPicked ? ' checked' : ''} aria-label="Chọn tất cả ${shown.length} đơn đang hiện"></th><th>Mã đơn</th><th>Khách hàng</th><th>Trạng thái</th><th>Sản phẩm</th><th class="r">Tổng đơn</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
         ${nPick ? `<div class="bulk" role="region" aria-label="Thao tác hàng loạt">
           <b>Đã chọn ${nPick} đơn</b>

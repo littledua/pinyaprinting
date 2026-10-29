@@ -289,14 +289,6 @@ a.tile:hover{border-color:var(--sky)}
   .tbl td{padding:0;border:0;width:auto}
   .tbl td.r{text-align:right}
   .tbl td.hide-sm{display:none}
-  .tbl.orders tr{grid-template-columns:28px minmax(0,1fr) auto}
-  .tbl.orders td:nth-child(1){grid-column:1;grid-row:1/5}
-  .tbl.orders td:nth-child(2){grid-column:2;grid-row:1}
-  .tbl.orders td:nth-child(3){grid-column:2;grid-row:2}
-  .tbl.orders td:nth-child(4){grid-column:2;grid-row:3}
-  .tbl.orders td:nth-child(6){grid-column:2;grid-row:4}
-  .tbl.orders td:nth-child(5){grid-column:3;grid-row:1;justify-self:end;text-align:right}
-  .tbl.orders td:nth-child(7){grid-column:3;grid-row:2/5}
   .tbl.prods tr{grid-template-columns:56px minmax(0,1fr) auto}
   .tbl.prods td:nth-child(1){grid-row:1/3}
   .tbl.prods td:nth-child(2){grid-column:2;grid-row:1}
@@ -529,3 +521,56 @@ a.soc:hover{text-decoration:underline}
 .side .brand-word{display:grid;gap:1px;line-height:1.15;min-width:0}
 .side .brand-word b{font:700 1.02rem/1.15 var(--font-display);overflow:hidden;text-overflow:ellipsis}
 .nav-it .nav-badge{flex:none}
+
+/* ==== Tổng quan: ô Việc cần làm có biểu tượng màu (kiểu Tiệm Dứa) ==== */
+.tcards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.tcard{--tc:#3F6E92;--tb:#E8F1F8;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"ic n" "l l" "s s";align-items:center;gap:4px 12px;padding:16px;border-radius:20px;background:var(--sheet);border:1px solid color-mix(in srgb,var(--sky) 25%,transparent);text-decoration:none;color:var(--ink);transition:transform .2s,box-shadow .2s}
+.tcard:hover{transform:translateY(-2px);box-shadow:0 12px 26px -18px color-mix(in srgb,var(--price) 80%,transparent)}
+.tc-ic{grid-area:ic;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--tb);color:var(--tc)}
+.tcard b{grid-area:n;justify-self:end;font:700 2rem/1 var(--font-display);font-variant-numeric:tabular-nums}
+.tc-l{grid-area:l;font-weight:800;font-size:.95rem;margin-top:6px}
+.tc-s{grid-area:s;font-size:.8rem;color:var(--ink-soft)}
+.tcard.zero{opacity:.6}
+.tcard.zero b{color:var(--ink-soft)}
+.tcard[data-tone="red"]{--tc:#C0392B;--tb:#FDE8E6}
+.tcard[data-tone="orange"]{--tc:#C2620A;--tb:#FFEEDD}
+.tcard[data-tone="blue"]{--tc:#2E6FB0;--tb:#E2EFFC}
+.tcard[data-tone="purple"]{--tc:#6A4FC2;--tb:#EEE8FD}
+.tcard[data-tone="green"]{--tc:#1D7A50;--tb:#E0F4EA}
+.tcard[data-tone="yellow"]{--tc:#8A6A00;--tb:#FFF4CC}
+.tcard:not(.zero)[data-tone="red"]{border-color:color-mix(in srgb,#C0392B 35%,transparent)}
+.money-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.mcell{display:grid;gap:2px;padding:14px 16px;border-radius:18px;background:var(--sheet);border:1px solid color-mix(in srgb,var(--sky) 25%,transparent)}
+.mcell span{font-size:.82rem;font-weight:700;color:var(--ink-soft)}
+.mcell b{font:700 1.3rem/1.25 var(--font-display);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.mcell small{font-size:.78rem;color:var(--ink-soft)}
+@media (max-width:760px){
+  .tcards{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .tcard{padding:14px;gap:2px 10px}
+  .tcard b{font-size:1.7rem}
+  .money-row{grid-template-columns:1fr;gap:8px}
+  .mcell{grid-template-columns:minmax(0,1fr) auto;align-items:baseline;padding:12px 14px}
+  .mcell small{grid-column:1/-1}
+}
+
+/* ==== Đơn hàng trên điện thoại: mỗi đơn một thẻ ==== */
+@media (max-width:760px){
+  .tbl-wrap:has(.tbl.orders){background:none;border:0;border-radius:0;overflow:visible}
+  .tbl.orders{min-width:0}
+  .tbl.orders tbody{display:grid;gap:10px}
+  .tbl.orders tr{grid-template-columns:30px auto minmax(0,1fr);grid-template-areas:"pick id st" "pick name name" "pick it it" "pick money money";gap:6px 10px;padding:14px;border:1px solid color-mix(in srgb,var(--sky) 25%,transparent)!important;border-radius:18px;background:var(--sheet)}
+  .tbl.orders tr.picked{border-color:var(--price)!important;background:color-mix(in srgb,var(--sky-soft) 50%,var(--sheet))}
+  .tbl.orders td:nth-child(1){grid-area:pick}
+  .tbl.orders td:nth-child(2){grid-area:id;font-size:1rem}
+  .tbl.orders td:nth-child(3){grid-area:name}
+  .tbl.orders td:nth-child(3) .sub{display:inline;margin-left:8px}
+  .tbl.orders td:nth-child(4){grid-area:st;justify-self:end;text-align:right;min-width:0}
+  .tbl.orders td:nth-child(4) .pill{white-space:normal;text-align:left}
+  .tbl.orders td:nth-child(5){grid-area:it;background:color-mix(in srgb,var(--sky-soft) 35%,var(--paper));border-radius:12px;padding:8px 10px;font-size:.88rem}
+  .tbl.orders td:nth-child(6){grid-area:money;text-align:right}
+  .tbl.orders .it-line{display:block}
+}
+@media (max-width:760px){.tbl.orders td.r{white-space:normal;min-width:0}.tbl.orders td.r .tag-pay{white-space:nowrap}}
+.tbl.orders td.cust b{font-weight:700;white-space:nowrap}
+.tbl.orders td.cust .soc{font-weight:700}
+.tbl-wrap.tbl-scroll{position:relative}

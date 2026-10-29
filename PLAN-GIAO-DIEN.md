@@ -1,6 +1,6 @@
 # Kế hoạch cải thiện giao diện Pinya Printing (cửa hàng + admin)
 
-Trạng thái: **CHỜ BẠN DUYỆT. Chưa sửa gì trong code giao diện.**
+Trạng thái: **ĐÃ LÀM XONG 4 đợt theo kiểu Tiệm Dứa (màu xanh + hồng), có QR VietQR.** Bản kế hoạch có ảnh: https://claude.ai/artifact/JuYvk9xPVW5QfzKL36f5sL
 Dùng bộ skill `impeccable` (quy trình: hỏi → chốt hướng → làm → tự kiểm).
 
 ## 1. Mình đã khám nhanh hiện trạng (chụp thật, điện thoại 390px + máy tính 1366px)
