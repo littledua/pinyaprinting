@@ -13,7 +13,7 @@ Pinya Printing là một tiệm in nhỏ tại Việt Nam, do **một người**
 
 Khẩu hiệu hiện tại: "In ấn tại xưởng, giao tận tay". Câu giới thiệu: "Pinya nhận in giấy, nhựa mica, in 3D và in vải tại xưởng với giá xưởng."
 
-Cách làm việc: đơn được gửi cho các **xưởng in đối tác** (nhiều xưởng ở Quảng Châu, Trung Quốc). Hàng in xong về kho trung chuyển, qua đơn vị **logistics** về Việt Nam, rồi giao tận tay khách. Thời gian in khoảng 5–10 ngày tùy sản phẩm, cộng thời gian vận chuyển.
+Cách làm việc: đơn được gửi cho các **xưởng in đối tác ở Trung Quốc** (nhiều thành phố khác nhau; chủ shop tự thêm và tùy chỉnh thông tin từng xưởng trong admin). Hàng in xong về kho trung chuyển, qua đơn vị **logistics** về Việt Nam, rồi giao tận tay khách. Thời gian in khoảng 5–10 ngày tùy sản phẩm, cộng thời gian vận chuyển.
 
 Web gồm 2 phần:
 - **Cửa hàng** cho khách: https://littledua.github.io/pinyaprinting/
@@ -22,9 +22,9 @@ Web gồm 2 phần:
 ## 2. Người dùng
 
 **Khách mua (cửa hàng)**
-- Người trẻ 18–30 tuổi đặt đồ in cá nhân hoặc đồ fan: móc khóa, standee, figure, áo, túi tote in hình riêng.
-- Shop nhỏ, người bán online, người làm thương hiệu cá nhân cần name card, hộp, túi, tem nhãn số lượng vừa (thường từ vài chục đến vài trăm cái).
-- Phần lớn xem bằng **điện thoại**, vào từ link trên Facebook, Instagram, Zalo, Threads.
+- **Mọi khách hàng có nhu cầu in ấn**: cá nhân in đồ riêng, đồ fan (móc khóa, standee, figure, áo, túi tote), shop nhỏ và người bán online cần name card, hộp, túi, tem nhãn, doanh nghiệp nhỏ in số lượng vừa.
+- **Tệp chính là người dùng mạng xã hội.** Kênh chính shop dùng để tiếp cận khách là **Threads**; khách bấm link từ bài Threads (và Facebook, Instagram, Zalo) vào web.
+- Vì vậy gần như luôn xem bằng **điện thoại**, mở trong trình duyệt của app mạng xã hội, ghé nhanh, cần hiểu ngay trong vài giây.
 - Họ cần thấy nhanh: có in được món mình muốn không, giá bao nhiêu, đặt tối thiểu bao nhiêu, bao lâu có hàng, đặt và trả tiền thế nào.
 
 **Chủ shop (trang quản trị)**
@@ -70,7 +70,7 @@ Web gồm 2 phần:
   - Trang sửa sản phẩm: tên, danh mục, thời gian in, mô tả, ảnh có sắp xếp thứ tự, lấy ảnh từ link mạng xã hội, nhóm phân loại và bảng giá theo tổ hợp.
   - Thư viện **Phân loại** dùng chung.
   - **Danh mục**.
-- **Xưởng:** danh sách xưởng đối tác, thành phố, danh mục nhận in, đánh giá.
+- **Xưởng:** danh sách xưởng đối tác ở Trung Quốc, chủ shop **tự thêm, sửa thông tin** từng xưởng (tên, thành phố, danh mục nhận in, liên hệ, đánh giá, ghi chú).
 - **Logistics:** kho trung chuyển, tuyến, giá theo kg.
 - **Cài đặt:**
   - **Cửa hàng:** tên, khẩu hiệu, mô tả, liên hệ (Zalo, email, giờ làm, địa chỉ, Facebook, Instagram), luật thanh toán, ngân hàng nhận tiền, tên hiển thị khi nhắn khách.
@@ -89,6 +89,8 @@ Web gồm 2 phần:
 - **Dấu riêng của nghề in** có thể dùng làm điểm nhấn: dấu canh chỉnh (registration mark) làm logo mặc định, dải màu CMYK, dấu xén góc, mỗi danh mục một màu mực (xanh C, hồng M, vàng Y, xám K).
 
 ## 7. Yêu cầu bắt buộc khi thiết kế lại
+- **Tối giản, dễ dùng, dễ thao tác.** Ít chữ, ít bước, mỗi màn hình một việc chính, nút hành động rõ ràng, không trang trí thừa. Người lần đầu vào từ Threads phải tự đặt được đơn mà không cần hỏi shop.
+- **Tra đơn bằng số điện thoại** là chức năng nổi bật, dễ thấy ở mọi trang (không chỉ ở chân trang): khách nhập số điện thoại là thấy **tất cả đơn in** của mình và **trạng thái từng đơn** (chờ thanh toán, đang in, đang vận chuyển, đã giao), mở từng đơn xem chi tiết tiến độ.
 - **Điện thoại trước**, rồi máy tính. Thử ở bề ngang 320, 360, 390 px và 1366 px. Không được cuộn ngang.
 - Ô nhập chữ tối thiểu 16px để iPhone không tự phóng to. Nút bấm cao ít nhất 44px.
 - Toàn bộ chữ trên web bằng **tiếng Việt**, giọng thân thiện, ngắn gọn, không thuật ngữ.
