@@ -1,52 +1,55 @@
 /* Pinya Printing · nền chung cho trang chủ, trang khách hàng và trang quản trị */
 /* Phong cách: nhẹ nhàng, baby blue chủ đạo, chữ tròn chân, góc bo mềm. Bốn mục in mang bốn màu mực pastel C · M · Y · K */
 :root{
-  --paper:#F5FAFE;
+  /* Pastel Pop: nền băng xanh xám, chữ xanh than, xanh baby chủ đạo, hồng san hô để chốt đơn */
+  --paper:#F8FAFC;
   --sheet:#FFFFFF;
-  --ink:#1E3A52;
-  --ink-soft:#5E768C;
-  --rule:#DCE8F2;
+  --ink:#1E293B;
+  --ink-soft:#64748B;
+  --rule:#E2E8F0;
 
-  --sky:#8FCBF0;        /* baby blue chủ đạo */
-  --sky-deep:#3A8CCB;   /* xanh đậm hơn cho trạng thái đang chọn */
-  --sky-soft:#DDF0FC;   /* nền nhạt */
-  --sky-wash:#E6F4FD;   /* nền đầu trang */
-  --accent-text:#2E7DBA;
+  --sky:#7BB8E8;        /* xanh baby chủ đạo */
+  --sky-deep:#1C648F;   /* xanh đậm: chữ trên nền nhạt, trạng thái đang chọn */
+  --sky-soft:#E3F0FB;
+  --sky-wash:#F0F6FC;
+  --accent-text:#1C648F;
 
-  --c:#7FCBF0;
-  --m:#F5A3C7;
-  --y:#FFE08A;
-  --k:#6E7F91;
-  --g:#9ED9C3;
-  --l:#C7B9F2;
-  --p:#F7C4A3;
+  --c:#7BB8E8;
+  --m:#FF8E9E;
+  --y:#FEF08A;
+  --k:#94A3B8;
+  --g:#A7F3D0;
+  --l:#C4B5FD;
+  --p:#FDBA8C;
 
-  /* Màu nhấn thứ hai (mặc định hồng, chọn lại ở Cài đặt › Giao diện) */
-  --pop:#F7C6D9; --pop-deep:#E88FB3; --pop-soft:#FDE8F0; --on-pop:#4A1530;
-  /* Chữ giá tiền, biểu tượng: xanh xám đủ tương phản trên nền trắng */
-  --price:#3F6E92;
-  --cta:#8FCBF0;
-  --cta-hover:#79C0EC;
-  --on-cta:#12324A;
+  /* Màu nhấn (mặc định hồng san hô, chọn lại ở Cài đặt › Giao diện) */
+  --pop:#FF8E9E; --pop-deep:#E86F82; --pop-soft:#FFE8EC; --on-pop:#3B0C16;
+  --lemon:#FEF08A; --on-lemon:#422006;
+  --mint:#A7F3D0; --on-mint:#065F46;
+  /* Giá tiền và nút chốt đơn: hồng đậm đủ tương phản với chữ trắng */
+  --price:#A8485A;
+  --cta:#A8485A;
+  --cta-hover:#933B4C;
+  --on-cta:#FFFFFF;
   --on-ink:#FFFFFF;
   --proof:#FFFFFF;
-  --proof-ink:#1E3A52;
-  --proof-rule:#C9D8E4;
-  --focus:#3A8CCB;
+  --proof-ink:#1E293B;
+  --proof-rule:#CBD5E1;
+  --focus:#1C648F;
   --err:#C0392B;
-  --veil:rgba(245,250,254,.86);
-  --scrim:rgba(30,58,82,.4);
-  --shadow:0 1px 2px rgba(30,58,82,.05), 0 14px 34px -18px rgba(58,140,203,.35);
+  --veil:rgba(255,255,255,.9);
+  --scrim:rgba(15,23,42,.4);
+  --shadow:0 4px 20px -2px rgba(111,168,220,.12), 0 2px 6px -1px rgba(30,41,59,.05);
+  --shadow-up:0 10px 25px -4px rgba(111,168,220,.22), 0 4px 10px -2px rgba(30,41,59,.07);
 
-  /* Trạng thái đơn: tách khỏi màu mực của mục in */
-  --act-fg:#8A5A00; --act-bg:#FFF1D2;
-  --ok-fg:#1D7A50;  --ok-bg:#E0F4EA;
+  --act-fg:#854D0E; --act-bg:#FEF9C3;
+  --ok-fg:#065F46;  --ok-bg:#D1FAE5;
   --off-fg:#B03A3A; --off-bg:#FCE6E6;
-  --run-fg:#3F5A72; --run-bg:#E8F1F8;
+  --run-fg:#1C648F; --run-bg:#E3F0FB;
 
-  --font-display:"Quicksand","Nunito",system-ui,sans-serif;
-  --font-body:"Quicksand","Nunito","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
-  --font-mono:"Quicksand","Segoe UI",system-ui,sans-serif;
+  --font-display:"Quicksand","Nunito Sans",system-ui,sans-serif;
+  --font-body:"Nunito Sans","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  --font-mono:"Nunito Sans","Segoe UI",system-ui,sans-serif;
   --font-cjk:"Noto Sans SC","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
 
   --r:16px;
@@ -56,36 +59,38 @@
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --paper:#0E1822; --sheet:#152330; --ink:#E4EFF8; --ink-soft:#9FB6CA; --rule:#243649;
-    --sky:#8FCBF0; --sky-deep:#7CC0EE; --sky-soft:#1C3549; --sky-wash:#122434; --accent-text:#9AD3F5;
-    --c:#7FCBF0; --m:#F2A0C4; --y:#F5DA7E; --k:#8DA0B4; --g:#93D3BB; --l:#BCAEEE; --p:#F2BB98;
-    --cta:#8FCBF0; --cta-hover:#A9D8F5; --on-cta:#0F2233; --on-ink:#FFFFFF;
-    --pop:#F2A0C4; --pop-deep:#F08BB8; --pop-soft:#3A1F2D; --on-pop:#2A0D1C; --price:#9AD3F5;
-    --proof:#E9EEF2; --proof-ink:#1E3A52; --proof-rule:#BACBD8;
-    --focus:#8FCBF0; --err:#FF8A8E;
-    --veil:rgba(14,24,34,.86); --scrim:rgba(0,0,0,.6);
-    --shadow:0 1px 2px rgba(0,0,0,.3), 0 18px 40px -20px rgba(0,0,0,.7);
-    --act-fg:#F6C35C; --act-bg:#3A2B0C;
-    --ok-fg:#6FD7A6;  --ok-bg:#12321F;
+    --paper:#0F172A; --sheet:#1E293B; --ink:#F1F5F9; --ink-soft:#94A3B8; --rule:#334155;
+    --sky:#8DC2ED; --sky-deep:#8DC2ED; --sky-soft:#1E3A55; --sky-wash:#172338; --accent-text:#9CCBF0;
+    --c:#8DC2ED; --m:#FFA4B0; --y:#FDE68A; --k:#94A3B8; --g:#86EFAC; --l:#C4B5FD; --p:#FDBA8C;
+    --cta:#FFA4B0; --cta-hover:#FFB8C2; --on-cta:#3B0C16; --on-ink:#FFFFFF;
+    --pop:#FFA4B0; --pop-deep:#FF8E9E; --pop-soft:#3A1F2A; --on-pop:#2A0810; --price:#FFA4B0;
+    --lemon:#FDE68A; --on-lemon:#422006; --mint:#86EFAC; --on-mint:#052E1F;
+    --proof:#E9EEF2; --proof-ink:#1E293B; --proof-rule:#BACBD8;
+    --focus:#8DC2ED; --err:#FF8A8E;
+    --veil:rgba(15,23,42,.88); --scrim:rgba(0,0,0,.6);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 18px 40px -20px rgba(0,0,0,.7); --shadow-up:0 10px 25px -6px rgba(0,0,0,.6);
+    --act-fg:#FDE68A; --act-bg:#3A2F0C;
+    --ok-fg:#86EFAC;  --ok-bg:#12321F;
     --off-fg:#FF9A9A; --off-bg:#3A1618;
-    --run-fg:#BFD3E4; --run-bg:#1E3043;
+    --run-fg:#9CCBF0; --run-bg:#1E3A55;
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
-  --paper:#0E1822; --sheet:#152330; --ink:#E4EFF8; --ink-soft:#9FB6CA; --rule:#243649;
-  --sky:#8FCBF0; --sky-deep:#7CC0EE; --sky-soft:#1C3549; --sky-wash:#122434; --accent-text:#9AD3F5;
-  --c:#7FCBF0; --m:#F2A0C4; --y:#F5DA7E; --k:#8DA0B4; --g:#93D3BB; --l:#BCAEEE; --p:#F2BB98;
-  --cta:#8FCBF0; --cta-hover:#A9D8F5; --on-cta:#0F2233; --on-ink:#FFFFFF;
-  --pop:#F2A0C4; --pop-deep:#F08BB8; --pop-soft:#3A1F2D; --on-pop:#2A0D1C; --price:#9AD3F5;
-  --proof:#E9EEF2; --proof-ink:#1E3A52; --proof-rule:#BACBD8;
-  --focus:#8FCBF0; --err:#FF8A8E;
-  --veil:rgba(14,24,34,.86); --scrim:rgba(0,0,0,.6);
-  --shadow:0 1px 2px rgba(0,0,0,.3), 0 18px 40px -20px rgba(0,0,0,.7);
-  --act-fg:#F6C35C; --act-bg:#3A2B0C;
-  --ok-fg:#6FD7A6;  --ok-bg:#12321F;
+  --paper:#0F172A; --sheet:#1E293B; --ink:#F1F5F9; --ink-soft:#94A3B8; --rule:#334155;
+  --sky:#8DC2ED; --sky-deep:#8DC2ED; --sky-soft:#1E3A55; --sky-wash:#172338; --accent-text:#9CCBF0;
+  --c:#8DC2ED; --m:#FFA4B0; --y:#FDE68A; --k:#94A3B8; --g:#86EFAC; --l:#C4B5FD; --p:#FDBA8C;
+  --cta:#FFA4B0; --cta-hover:#FFB8C2; --on-cta:#3B0C16; --on-ink:#FFFFFF;
+  --pop:#FFA4B0; --pop-deep:#FF8E9E; --pop-soft:#3A1F2A; --on-pop:#2A0810; --price:#FFA4B0;
+  --lemon:#FDE68A; --on-lemon:#422006; --mint:#86EFAC; --on-mint:#052E1F;
+  --proof:#E9EEF2; --proof-ink:#1E293B; --proof-rule:#BACBD8;
+  --focus:#8DC2ED; --err:#FF8A8E;
+  --veil:rgba(15,23,42,.88); --scrim:rgba(0,0,0,.6);
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 18px 40px -20px rgba(0,0,0,.7); --shadow-up:0 10px 25px -6px rgba(0,0,0,.6);
+  --act-fg:#FDE68A; --act-bg:#3A2F0C;
+  --ok-fg:#86EFAC;  --ok-bg:#12321F;
   --off-fg:#FF9A9A; --off-bg:#3A1618;
-  --run-fg:#BFD3E4; --run-bg:#1E3043;
+  --run-fg:#9CCBF0; --run-bg:#1E3A55;
   color-scheme:dark;
 }
 

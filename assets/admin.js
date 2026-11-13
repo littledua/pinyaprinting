@@ -283,6 +283,7 @@
       </div>
       <h2 class="sec-title" style="margin-top:28px">Đơn theo trạng thái</h2>
       <div class="pipe">${pipe}</div>
+      ${quickApprove(db)}
       <div class="two" style="margin-top:24px">
         <section class="panel"><div class="panel-h"><h2>Việc cần làm</h2><span class="muted">${tasks.length} việc</span></div>
           ${tasks.length ? `<ul class="tasks">${tasks.map(({ o, needs }) => `<li><a href="#don-${esc(o.id)}">
@@ -297,6 +298,22 @@
             : '<p class="muted">Chưa có đơn nào.</p>'}
         </section>
       </div>`;
+  }
+
+  // Duyệt nhanh: đơn khách đã gửi ảnh chuyển khoản, xem ảnh rồi bấm Duyệt là đơn chuyển sang đang in
+  function quickApprove(db) {
+    const list = db.orders.filter(o => o.status === 'cho_coc' && o.paidNotice).sort((a, b) => a.paidNotice - b.paidNotice);
+    if (!list.length) return '';
+    return `<section class="panel quick" style="margin-top:24px"><div class="panel-h"><h2>Duyệt nhanh tiền chuyển khoản</h2><span class="muted">${list.length} đơn</span></div>
+      <div class="tbl-wrap tbl-scroll"><table class="tbl quick-tbl"><thead><tr><th>Đơn &amp; khách</th><th>Sản phẩm</th><th class="r">Cần nhận</th><th>Ảnh CK</th><th></th></tr></thead><tbody>
+      ${list.map(o => {
+        const m = P.money(o);
+        return `<tr><td class="id"><a href="#don-${esc(o.id)}">${esc(o.id)}</a><span class="sub">${esc(o.name)} · ${esc(fmt.phone(o.phone))}</span></td>
+          <td>${o.items.map(it => `<span class="it-line">${esc(it.productName)} <b>× ${fmt.num(it.qty)}</b></span>`).join('')}</td>
+          <td class="r"><b>${fmt.vnd(m.first)}</b><span class="sub">${esc(P.payLabel(o))} · ND ${esc(o.payRef || o.id)}</span></td>
+          <td>${o.proof ? `<button type="button" class="proof-thumb sm" data-proof="${esc(o.proof)}" aria-label="Xem ảnh chuyển khoản đơn ${esc(o.id)}"><span class="muted">…</span></button>` : '<span class="muted">Chưa có</span>'}</td>
+          <td class="r"><button class="btn btn-cta btn-sm" type="button" data-act="quick-ok" data-id="${esc(o.id)}">✓ Duyệt</button></td></tr>`;
+      }).join('')}</tbody></table></div></section>`;
   }
 
   // ==== Đơn hàng ====
@@ -1668,6 +1685,11 @@
         done('Đã xóa ' + (w ? w.name : 'kho') + '.'); return;
       }
       // Đơn hàng
+      case 'quick-ok': {
+        const id = t.dataset.id;
+        P.update(d => { const o = P.findOrder(d, id); if (o && o.status === 'cho_coc') P.act.confirmPayment(d, o); });
+        done('Đã xác nhận tiền đơn ' + id + '. Đơn chuyển sang đang in.'); return;
+      }
       case 'pay-ok': withOrder((d, o) => P.act.confirmPayment(d, o)); done('Đã xác nhận tiền. Đơn chuyển sang đang in.'); toTop(); return;
       case 'ship-start': {
         const method = document.getElementById('sh-method').value;

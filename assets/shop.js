@@ -31,6 +31,10 @@
     link: svg('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
     search: svg('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>'),
     menu: svg('<path d="M4 7h16M4 12h16M4 17h16"/>'),
+    home: svg('<path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/>'),
+    grid: svg('<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>'),
+    phone: svg('<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>'),
+    upload: svg('<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>'),
     close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
     left: svg('<path d="M15 5l-7 7 7 7"/>'),
     right: svg('<path d="M9 5l7 7-7 7"/>'),
@@ -57,6 +61,7 @@
     if (h === 'theo-doi') return { view: 'track' };
     if (h === 'lien-he') return { view: 'contact' };
     if (h === 'tim-kiem') return { view: 'search' };
+    if (h === 'danh-muc') return { view: 'all' };
     return { view: 'about' };
   }
   function go(hash) {
@@ -108,16 +113,17 @@
       case 'cat': body = viewCat(db, r.id); title = (P.findCategory(db, r.id) || {}).name; break;
       case 'product': body = viewProduct(db, r.id); title = (P.findProduct(db, r.id) || {}).name; break;
       case 'cart': body = viewCart(db); title = 'Giỏ hàng'; break;
-      case 'file': body = viewFile(db); title = 'Gửi file thiết kế'; break;
-      case 'pay': body = viewPay(db); title = 'Thanh toán'; break;
+      case 'file': body = viewPay(db); title = 'Đặt hàng'; break;
+      case 'pay': body = viewPay(db); title = 'Đặt hàng'; break;
       case 'done': body = viewDone(db, r.id); title = 'Đã đặt hàng'; break;
       case 'track': body = viewTrack(db); title = 'Theo dõi tiến độ in'; break;
       case 'order': body = viewOrder(db, r.id); title = 'Đơn ' + r.id; break;
       case 'contact': body = viewContact(db); title = 'Liên hệ'; break;
       case 'search': body = viewSearch(db); title = 'Tìm sản phẩm'; break;
+      case 'all': body = viewAll(db); title = 'Danh mục'; break;
       default: body = viewAbout(db);
     }
-    root.innerHTML = header(db, r) + '<main id="main">' + body + '</main>' + footer(db);
+    root.innerHTML = header(db, r) + '<main id="main">' + body + '</main>' + footer(db) + tabBar(db, r);
     document.title = (title ? title + ' · ' : '') + db.settings.shopName;
     if (keep) restore(keep);
     bindGallery();
@@ -169,6 +175,7 @@
         ${P.showSection(db, 'catGrid') ? `<a href="#gioi-thieu"${r.view === 'about' ? ' aria-current="page"' : ''}>Sản phẩm</a>` : ''}${L.track}${L.contact}
       </nav>
       <div class="sh-tools">
+        <a class="search-btn" href="#tim-kiem" aria-label="Tìm sản phẩm"${r.view === 'search' ? ' aria-current="page"' : ''}>${ICON.search}</a>
         <a class="cart-btn" href="#gio-hang" aria-label="Giỏ hàng${n ? ', ' + n + ' sản phẩm' : ''}"${['cart', 'file', 'pay'].includes(r.view) ? ' aria-current="page"' : ''}>${ICON.bag}${n ? `<span class="count">${n > 99 ? '99+' : n}</span>` : ''}</a>
         <button class="menu-btn" type="button" data-act="menu" aria-expanded="${!!ui.menu}" aria-controls="sh-menu" aria-label="${ui.menu ? 'Đóng menu' : 'Mở menu'}">${ui.menu ? ICON.close : ICON.menu}</button>
       </div>
@@ -212,10 +219,12 @@
   function pcard(db, p, i) {
     const pr = P.priceRange(p);
     const min = minOf(p);
+    const c = P.findCategory(db, p.catId);
     return `<a class="pcard" href="#sp-${esc(p.id)}"${i != null ? ` style="--i:${Math.min(i, 11)}"` : ''}>
-      <span class="pc-img">${P.thumb(db, p, 'pimg')}${min > 1 ? `<span class="pc-badge">Tối thiểu ${fmt.num(min)}</span>` : ''}<span class="pc-plus" aria-hidden="true">+</span></span>
+      <span class="pc-img">${P.thumb(db, p, 'pimg')}${c ? `<span class="pc-cat">${esc(c.name)}</span>` : ''}</span>
       <span class="pc-body"><h3>${esc(p.name)}</h3>
-        <span class="pc-price">${pr.min !== pr.max ? '<small>từ</small>' : ''}<b>${fmt.vnd(pr.min)}</b>${p.variants.length > 1 ? `<span>${p.variants.length} loại</span>` : ''}</span></span></a>`;
+        <span class="pc-moq">Từ ${fmt.num(min)} cái</span>
+        <span class="pc-price">${pr.min !== pr.max ? '<small>từ</small>' : ''}<b>${fmt.vnd(pr.min)}</b><span class="pc-plus" aria-hidden="true">+</span></span></span></a>`;
   }
 
   // Ảnh cho bong bóng danh mục: ảnh bìa (ảnh đầu tiên) của sản phẩm đầu tiên có ảnh trong danh mục.
@@ -248,6 +257,12 @@
       });
     });
     return list.slice().sort((a, b) => (score[b.id] || 0) - (score[a.id] || 0) || (all[b.id] || 0) - (all[a.id] || 0) || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 10);
+  }
+  function featuredGrid(db) {
+    const list = featured(db).slice(0, 4);
+    if (list.length < 2) return '';
+    return `<section class="wrap sec feat2" aria-labelledby="feat-h"><div class="sec-h"><div><h2 id="feat-h">Đang được đặt nhiều</h2></div><a class="link-more" href="#danh-muc">Xem tất cả</a></div>
+      <div class="pgrid">${list.map((p, i) => pcard(db, p, i)).join('')}</div></section>`;
   }
   function featuredStrip(db) {
     const list = featured(db);
@@ -293,12 +308,42 @@
   }
 
   // ==== Trang chủ ====
+  // Ô tra đơn bằng số điện thoại: có ở trang chủ, trang Tra đơn và khi xem một đơn
+  function lookPill(db, big) {
+    const known = P.getTrack();
+    return `<form class="look${big ? ' big' : ''}" id="look-form" role="search" novalidate data-keep>
+      <label class="sr-only" for="look-phone">Số điện thoại đặt hàng</label>
+      ${ICON.phone}<input id="look-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Nhập số điện thoại để xem đơn…" value="${esc(known ? fmt.phone(known) : '')}" aria-describedby="err-look-phone">
+      <button class="btn btn-cta" type="submit">Tra cứu</button>
+    </form><p class="err look-err" id="err-look-phone">${esc(ui.trackErr)}</p>`;
+  }
+
+  // Thanh tab dưới đáy điện thoại (ẩn ở trang có thanh đặt hàng riêng)
+  function tabBar(db, r) {
+    if (['product', 'cart', 'file', 'pay'].includes(r.view)) return '';
+    const n = P.cartLines(db).length;
+    const tab = (href, label, icon, on, extra) => `<a href="${href}"${on ? ' aria-current="page"' : ''}>${icon}<span>${label}</span>${extra || ''}</a>`;
+    return `<nav class="tabbar" aria-label="Điều hướng nhanh">
+      ${tab('#gioi-thieu', 'Trang chủ', ICON.home, r.view === 'about')}
+      ${tab('#danh-muc', 'Danh mục', ICON.grid, ['all', 'cat', 'search'].includes(r.view))}
+      ${tab('#theo-doi', 'Tra đơn', ICON.track, ['track', 'order', 'done'].includes(r.view))}
+      ${tab('#gio-hang', 'Giỏ hàng', ICON.bag, false, n ? `<b class="count">${n}</b>` : '')}
+    </nav>`;
+  }
+
+  function viewAll(db) {
+    return `<div class="wrap page">${browser(db, null, 'Tất cả sản phẩm', '')}</div>`;
+  }
+
   function viewAbout(db) {
+    const s = db.settings;
     const showAll = P.showSection(db, 'allGrid');
-    const bub = P.showSection(db, 'catGrid') ? bubbles(db, null) : '';
-    const feat = P.showSection(db, 'featured') ? featuredStrip(db) : '';
+    const feat = P.showSection(db, 'featured') ? featuredGrid(db) : '';
     const any = shown(db).length;
-    return `${bub}${feat}
+    const intro = String(s.about || '').split(/\n+/).map(x => x.trim()).filter(Boolean)[0] || '';
+    return `<div class="wrap home-top">${lookPill(db)}
+      <section class="hero2"><h1>${esc(s.tagline || s.shopName)}</h1>${intro ? `<p>${esc(intro)}</p>` : ''}</section></div>
+      ${feat}
       ${showAll || !any ? `<section class="wrap sec" id="san-pham">${any ? browser(db, null, 'Tất cả sản phẩm', '') : '<div class="panel empty"><h3>Shop đang cập nhật sản phẩm</h3><p>Nhắn shop để được tư vấn.</p><a class="btn btn-ghost btn-sm" href="#lien-he">Liên hệ shop</a></div>'}</section>` : ''}`;
   }
 
@@ -375,18 +420,19 @@
         </div>
         <div class="pinfo">
           <div class="pd-head">${P.catTag(db, p.catId)}<h1>${esc(p.name)}</h1></div>
-          ${v ? `<div class="pd-price"><span class="pprice">${fmt.vnd(v.price)}</span>${min > 1 ? `<span class="pop-pill">Tối thiểu ${fmt.num(min)}</span>` : ''}</div>` : '<p class="muted">Sản phẩm đang cập nhật giá.</p>'}
-          ${p.leadDays ? `<p class="pd-lead">${ICON.clock}In khoảng ${esc(p.leadDays)} ngày, cộng thời gian vận chuyển</p>` : ''}
-          ${v && grouped ? p.groups.map((g, gi) => `<div class="pd-opt"><p class="lbl">${esc(g.name)}: <b>${esc(v.opts[gi])}</b></p>
+          ${v ? `<div class="pd-price"><span class="pprice">${fmt.vnd(v.price)}</span><span class="per">/ cái</span></div>` : '<p class="muted">Sản phẩm đang cập nhật giá.</p>'}
+          <div class="pd-facts"><div class="fact-t">${ICON.bag}<div><small>Tối thiểu</small><b>Từ ${fmt.num(min)} cái</b></div></div>
+            <div class="fact-t mint">${ICON.clock}<div><small>Hoàn thiện</small><b>${p.leadDays ? 'Khoảng ' + esc(p.leadDays) + ' ngày' : 'Hỏi shop'}</b></div></div></div>
+          ${v && grouped ? p.groups.map((g, gi) => `<div class="pd-opt"><p class="lbl">${gi + 1}. ${esc(g.name)} <b>${esc(v.opts[gi])}</b></p>
             <div class="vchips" role="group" aria-label="${esc(g.name)}">${g.values.filter(val => p.variants.some(x => x.opts[gi] === val)).map(val =>
               `<button type="button" class="vchip" data-act="opt" data-g="${gi}" data-v="${esc(val)}" aria-pressed="${v.opts[gi] === val}">${esc(val)}</button>`).join('')}</div></div>`).join('') : ''}
-          ${v && !grouped ? `<div class="pd-opt"><p class="lbl">Phân loại: <b>${esc(v.name)}</b></p>
+          ${v && !grouped ? `<div class="pd-opt"><p class="lbl">1. Chọn loại <b>${esc(v.name)}</b></p>
             <div class="vchips" role="group" aria-label="Chọn phân loại">${p.variants.map(x =>
               `<button type="button" class="vchip" data-act="variant" data-id="${esc(x.id)}" aria-pressed="${x.id === v.id}">${esc(x.name)}<small>${fmt.vnd(x.price)}${(+x.minQty || 1) > 1 ? ' · từ ' + fmt.num(x.minQty) : ''}</small></button>`).join('')}</div></div>` : ''}
-          ${v ? `<div class="qty-row"><span class="lbl" id="q-lbl">Số lượng</span>
-            <div class="qty"><button type="button" data-act="qty-" aria-label="Giảm số lượng">−</button><input id="pq" inputmode="numeric" autocomplete="off" value="${ui.sel.qty}" aria-labelledby="q-lbl"><button type="button" data-act="qty+" aria-label="Tăng số lượng">+</button></div>
-            <span class="hint" id="pq-total" aria-live="polite">Thành tiền <b>${fmt.vnd(total)}</b></span></div>
-          <div class="pbtns"><button class="btn btn-pop" type="button" data-act="add">${ICON.bag}Thêm vào giỏ</button><button class="btn btn-cta" type="button" data-act="buy">Mua ngay</button></div>` : ''}
+          ${v ? `<div class="qty-card"><div class="qty-row"><div><span class="lbl" id="q-lbl">Số lượng in</span><small class="hint">Tối thiểu ${fmt.num(min)} cái</small></div>
+            <div class="qty"><button type="button" data-act="qty-" aria-label="Giảm số lượng">−</button><input id="pq" inputmode="numeric" autocomplete="off" value="${ui.sel.qty}" aria-labelledby="q-lbl"><button type="button" data-act="qty+" aria-label="Tăng số lượng">+</button></div></div>
+            <div class="qty-sum" id="pq-total" aria-live="polite"><span>${fmt.num(ui.sel.qty)} cái × ${fmt.vnd(v.price)}</span><b>${fmt.vnd(total)}</b></div></div>
+          <div class="pbtns"><button class="btn btn-ghost" type="button" data-act="add">${ICON.bag}Thêm vào giỏ</button><button class="btn btn-cta" type="button" data-act="buy">Mua ngay &amp; Gửi file</button></div>` : ''}
           ${p.desc ? `<section class="pd-box"><h2>Mô tả</h2><p class="pdesc">${esc(p.desc)}</p></section>` : ''}
           ${P.showSection(db, 'pnotes') ? `<ul class="pnotes">
             <li>Bạn gửi file thiết kế qua link Google Drive ở bước đặt hàng</li>
@@ -395,13 +441,13 @@
         </div>
       </div></div>
       ${v ? `<div class="float-bar" role="region" aria-label="Đặt nhanh"><div class="fb-sum"><b id="pq-total2">${fmt.vnd(total)}</b><small>${fmt.num(ui.sel.qty)} · ${esc(vname)}</small></div>
-        <button class="fb-cart" type="button" data-act="add" aria-label="Thêm vào giỏ">${ICON.bag}</button><button class="btn btn-cta" type="button" data-act="buy">Mua ngay</button></div>` : ''}`;
+        <button class="fb-cart" type="button" data-act="add" aria-label="Thêm vào giỏ">${ICON.bag}</button><button class="btn btn-cta" type="button" data-act="buy">Mua ngay &amp; Gửi file</button></div>` : ''}`;
   }
 
   function setTotals(v) {
     if (!v) return;
     const s = fmt.vnd(v.price * clampQ(ui.sel.qty, 1));
-    const out = document.getElementById('pq-total'); if (out) out.innerHTML = 'Thành tiền <b>' + s + '</b>';
+    const out = document.getElementById('pq-total'); if (out) out.innerHTML = '<span>' + fmt.num(clampQ(ui.sel.qty, 1)) + ' cái × ' + fmt.vnd(v.price) + '</span><b>' + s + '</b>';
     const o2 = document.getElementById('pq-total2'); if (o2) o2.textContent = s;
     const sm = document.querySelector('.fb-sum small'); if (sm) sm.textContent = sm.textContent.replace(/^[\d.]+/, fmt.num(clampQ(ui.sel.qty, 1)));
   }
@@ -473,16 +519,15 @@
     const sub = lines.reduce((a, l) => a + l.line, 0);
     return `<div class="wrap page">
       <div class="page-head"><div><h1>Giỏ hàng</h1><p>${lines.length} sản phẩm</p></div><a class="link-btn" href="#gioi-thieu">Tiếp tục xem sản phẩm</a></div>
-      ${steps(0)}
       <div class="cart-grid">
         <section class="panel" aria-label="Sản phẩm trong giỏ">${lines.map((l, i) => cline(db, l, i)).join('')}</section>
         <aside class="panel summary"><div class="panel-h"><h2>Tạm tính</h2></div>
           <table class="money"><tbody><tr class="total"><td>Tổng tiền hàng</td><td id="sum-total">${fmt.vnd(sub)}</td></tr></tbody></table>
           <p class="hint" style="margin-top:12px">${esc(payRule(db.settings))}</p>
-          <div class="actions"><a class="btn btn-cta" href="#gui-file" style="width:100%">Tiếp tục: gửi file</a></div>
+          <div class="actions"><a class="btn btn-cta" href="#thanh-toan" style="width:100%">Đặt hàng</a></div>
         </aside>
       </div></div>
-      <div class="buy-bar"><div><small>Tạm tính</small><b id="sum-total2">${fmt.vnd(sub)}</b></div><a class="btn btn-cta" href="#gui-file">Tiếp tục: gửi file</a></div>`;
+      <div class="buy-bar"><div><small>Tạm tính</small><b id="sum-total2">${fmt.vnd(sub)}</b></div><a class="btn btn-cta" href="#thanh-toan">Đặt hàng</a></div>`;
   }
 
   function viewFile(db) {
@@ -511,14 +556,11 @@
       </div></div>`;
   }
 
+  // Đặt hàng một trang, 4 bước: file in → người nhận → chuyển khoản (QR) → ảnh chuyển khoản
   function viewPay(db) {
     const lines = P.cartLines(db);
     if (!lines.length) return emptyCart(db);
     const co = getCo();
-    if (!P.isUrl(co.file)) {
-      return `<div class="wrap page">${steps(1)}<div class="panel empty"><h3>Bạn chưa gửi link file thiết kế</h3><p>Dán link Google Drive trước khi thanh toán.</p>
-        <a class="btn btn-cta btn-sm" href="#gui-file">Gửi file</a></div></div>`;
-    }
     const s = db.settings;
     const sub = lines.reduce((a, l) => a + l.line, 0);
     const opts = P.payOptions(s, sub);
@@ -528,46 +570,51 @@
     const k = Object.assign({}, known || {}, co.ship || {});
     const field = (id, label, attrs, value, full) =>
       `<div class="field${full ? ' full' : ''}"><label for="${id}">${label} <span class="req" aria-hidden="true">*</span></label><input id="${id}" ${attrs} value="${esc(value || '')}" aria-describedby="err-${id}"><p class="err" id="err-${id}"></p></div>`;
-    return `<div class="wrap page">
-      <div class="page-head"><div><h1>Thanh toán</h1><p>Điền thông tin nhận hàng và chọn cách thanh toán.</p></div></div>
-      ${steps(2)}
+    const stepH = (n, title, right) => `<div class="step-h"><span class="step-n">${n}</span><h2>${title}</h2>${right || ''}</div>`;
+    return `<div class="wrap page co-page">
+      <div class="page-head"><div><h1>Đặt hàng</h1><p>${co.code ? 'Mã đơn <b>' + esc(co.code) + '</b> · ' : ''}4 bước, khoảng 2 phút.</p></div></div>
       <div class="cart-grid">
         <form class="stack" id="checkout" novalidate data-keep>
-          <section class="panel"><div class="panel-h"><h2>Thông tin nhận hàng</h2></div>
+          <section class="panel co-sum"><div class="panel-h"><h2>Sản phẩm</h2><a class="link-btn" href="#gio-hang">Sửa giỏ hàng</a></div>${miniSummary(lines)}</section>
+          <section class="panel">${stepH(1, 'File in')}
+            <div class="field"><label for="co-file">Link Google Drive chứa file in <span class="req" aria-hidden="true">*</span></label>
+              <input id="co-file" type="url" autocomplete="off" placeholder="https://drive.google.com/…" value="${esc(co.file || '')}" aria-describedby="co-file-hint err-co-file"><p class="err" id="err-co-file"></p>
+              <p class="hint" id="co-file-hint">Mở quyền "Bất kỳ ai có đường liên kết" để shop tải được file.</p></div>
+            <div class="field" style="margin-top:12px"><label for="co-note">Ghi chú cho shop</label>
+              <textarea id="co-note" rows="2" placeholder="Màu sắc, vị trí in, ngày cần hàng…">${esc(co.note || '')}</textarea></div>
+          </section>
+          <section class="panel">${stepH(2, 'Người nhận')}
             <div class="form-grid">
               ${field('co-name', 'Họ tên', 'autocomplete="name" placeholder="VD: Nguyễn Thu Hà"', k.name)}
-              ${field('co-phone', 'Số điện thoại', 'type="tel" inputmode="tel" autocomplete="tel" placeholder="Dùng số này để theo dõi đơn"', k.phone ? fmt.phone(k.phone) : '')}
-              ${field('co-social', 'Link mạng xã hội', 'type="url" autocomplete="url" placeholder="Facebook, Instagram hoặc Zalo của bạn"', k.social, true)}
+              ${field('co-phone', 'Số điện thoại', 'type="tel" inputmode="tel" autocomplete="tel" placeholder="0912 345 678"', k.phone ? fmt.phone(k.phone) : '')}
+              <p class="note-blue full">Số điện thoại này dùng để tra cứu tiến độ đơn sau khi đặt.</p>
+              ${field('co-social', 'Link mạng xã hội', 'type="url" autocomplete="url" placeholder="Threads, Instagram, Facebook hoặc Zalo"', k.social, true)}
               ${field('co-address', 'Địa chỉ nhận hàng', 'autocomplete="street-address" placeholder="Số nhà, đường, phường"', k.address, true)}
               <div class="field"><label for="co-city">Tỉnh, thành</label><select id="co-city">${DEST.map(d => `<option${d === k.city ? ' selected' : ''}>${esc(d)}</option>`).join('')}</select></div>
             </div>
           </section>
-          <fieldset class="panel pay-box"><legend class="sr-only">Cách thanh toán</legend>
-            <div class="panel-h"><h2>Cách thanh toán</h2><span class="muted">Đơn ${sub < s.payThreshold ? 'dưới' : 'từ'} ${esc(fmt.short(s.payThreshold))}</span></div>
+          <fieldset class="panel pay-box"><legend class="sr-only">Cách thanh toán</legend>${stepH(3, 'Chuyển khoản', `<span class="muted">Đơn ${sub < s.payThreshold ? 'dưới' : 'từ'} ${esc(fmt.short(s.payThreshold))}</span>`)}
             <div class="pay-opts">${opts.map(o => `<label class="pay-opt">
               <input type="radio" name="pay" value="${o.pct}" aria-label="${esc(o.label)}, chuyển khoản ${fmt.vnd(o.amount)}"${o.pct === pick ? ' checked' : ''}>
               <span class="po-title">${esc(o.label)}</span>
               <span class="po-amt">${fmt.vnd(o.amount)}</span>
               <span class="po-note">${esc(o.note)}</span></label>`).join('')}</div>
+            ${transferBox(db, chosen.amount, co.code)}
           </fieldset>
-          ${transferBox(db, chosen.amount, co.code)}
-          <section class="panel"><div class="panel-h"><h2>File thiết kế</h2><a class="link-btn" href="#gui-file">Sửa</a></div>
-            <p class="copy-line" style="overflow-wrap:anywhere">${ICON.folder.replace('<svg', '<svg width="18" height="18"')}<a href="${esc(co.file)}" target="_blank" rel="noopener">${esc(co.file)}</a></p>
-            ${co.note ? `<p class="muted" style="margin-top:6px">${esc(co.note)}</p>` : ''}
-          </section>
+          <section class="panel">${stepH(4, 'Ảnh chuyển khoản', '<span class="tag-req">Bắt buộc</span>')}${proofBox()}</section>
         </form>
-        <aside class="panel summary"><div class="panel-h"><h2>Đơn của bạn</h2></div>
-          ${miniSummary(lines)}
+        <aside class="panel summary"><div class="panel-h"><h2>Thanh toán</h2></div>
           <table class="money"><tbody>
+            <tr><td>Tổng đơn</td><td>${fmt.vnd(sub)}</td></tr>
             <tr class="sub"><td id="pay-label">${esc(chosen.label)}</td><td></td></tr>
             <tr><td><b>Chuyển khoản ngay</b></td><td><b id="pay-now">${fmt.vnd(chosen.amount)}</b></td></tr>
             <tr class="sub"><td>Trả khi nhận hàng</td><td id="pay-later">${fmt.vnd(sub - chosen.amount)}</td></tr>
           </tbody></table>
-          <div class="actions"><button class="btn btn-cta" type="submit" form="checkout" style="width:100%">Đặt hàng</button></div>
-          <p class="hint" style="margin-top:10px">Quét mã QR để chuyển khoản, tải ảnh chụp chuyển khoản lên rồi bấm Đặt hàng.</p>
+          <div class="actions"><button class="btn btn-cta" type="submit" form="checkout" style="width:100%">Hoàn tất đặt đơn</button></div>
+          <p class="hint" style="margin-top:10px">Chuyển khoản theo mã QR, tải ảnh chụp lên rồi bấm Hoàn tất.</p>
         </aside>
       </div></div>
-      <div class="buy-bar"><div><small>Chuyển khoản ngay</small><b id="pay-now2">${fmt.vnd(chosen.amount)}</b></div><button class="btn btn-cta" type="submit" form="checkout">Đặt hàng</button></div>`;
+      <div class="buy-bar"><div><small>Chuyển khoản ngay</small><b id="pay-now2">${fmt.vnd(chosen.amount)}</b></div><button class="btn btn-cta" type="submit" form="checkout">Hoàn tất đặt đơn</button></div>`;
   }
 
   function refreshCartNumbers() {
@@ -611,20 +658,20 @@
         P.cust.reserveCode().then(c => { patchCo({ code: c }); ui.reserving = false; render(); },
           e => { ui.reserving = false; ui.codeErr = P.errText(e); render(); });
       }
-      return `<section class="panel" id="pay-transfer"><div class="panel-h"><h2>Chuyển khoản</h2></div>
-        ${ui.codeErr ? `<p class="err">${esc(ui.codeErr)}</p><button class="btn btn-quiet btn-sm" type="button" data-act="code-retry">Thử lại</button>` : '<p class="muted">Đang tạo mã đơn cho bạn…</p>'}</section>`;
+      return `<div id="pay-transfer" class="xfer">${ui.codeErr ? `<p class="err">${esc(ui.codeErr)}</p><button class="btn btn-quiet btn-sm" type="button" data-act="code-retry">Thử lại</button>` : '<p class="muted">Đang tạo mã đơn cho bạn…</p>'}</div>`;
     }
+    return `<div id="pay-transfer" class="xfer"><p class="muted">Chuyển <b>${fmt.vnd(amount)}</b>, nội dung ghi đúng mã đơn <b>${esc(code)}</b>. Quét mã QR là có sẵn cả hai.</p>
+      ${bankBlock(db, amount, code)}</div>`;
+  }
+
+  function proofBox() {
     const pf = ui.proof;
-    return `<section class="panel" id="pay-transfer"><div class="panel-h"><h2>Chuyển khoản</h2><span class="muted">Mã đơn <b>${esc(code)}</b></span></div>
-      <p class="muted">Chuyển <b>${fmt.vnd(amount)}</b>, nội dung ghi đúng mã đơn <b>${esc(code)}</b>. Quét mã QR là có sẵn cả hai.</p>
-      ${bankBlock(db, amount, code)}
-      <div class="proof" id="proof-box">
-        <p class="lbl" style="margin-top:18px">Ảnh chụp chuyển khoản <span class="req" aria-hidden="true">*</span></p>
+    return `<div class="proof" id="proof-box">
         <input id="proof-in" type="file" accept="image/*" class="sr-only" aria-describedby="err-proof">
         ${pf ? `<div class="proof-ok"><img src="${esc(pf.url)}" alt="Ảnh chuyển khoản đã chọn"><div><b>Đã chọn ảnh chuyển khoản</b><span>${esc(pf.name)}</span></div><label class="btn btn-quiet btn-sm" for="proof-in">Đổi ảnh</label></div>`
-          : `<label class="proof-pick" for="proof-in">${ICON.folder}<b>Tải lên ảnh chụp chuyển khoản</b><span>Chụp màn hình app ngân hàng sau khi chuyển · JPG, PNG</span></label>`}
+          : `<label class="proof-pick" for="proof-in">${ICON.upload}<b>Chạm để tải ảnh chụp chuyển khoản</b><span>Chụp màn hình app ngân hàng sau khi chuyển · JPG, PNG</span></label>`}
         <p class="err" id="err-proof"></p>
-      </div></section>`;
+      </div>`;
   }
 
   function viewDone(db, id) {
@@ -669,7 +716,11 @@
 
   function viewTrack(db) {
     const phone = P.getTrack();
-    if (!phone) return `<div class="wrap page">${trackForm(db, 'Theo dõi tiến độ in', 'Nhập số điện thoại bạn dùng khi đặt hàng để xem các đơn và tiến độ in.')}</div>`;
+    if (!phone) {
+      const demo = db.orders.some(o => o.demo);
+      return `<div class="wrap page"><section class="track-hero"><h1>Tra cứu đơn in</h1><p class="muted">Nhập số điện thoại bạn dùng khi đặt hàng để xem tất cả đơn và tiến độ in.</p>${lookPill(db, true)}
+        ${demo ? '<p class="hint">Bản chạy thử: nhập 0912 345 678 để xem đơn mẫu.</p>' : ''}</section></div>`;
+    }
     const list = P.ordersByPhone(db, phone);
     let html = `<div class="wrap page"><div class="page-head"><div><h1>Đơn của bạn</h1>
       <p>Số ${esc(fmt.phone(phone))} · ${list.length} đơn · <button class="link-btn" type="button" data-act="track-clear">Đổi số khác</button></p></div></div>`;
@@ -682,16 +733,42 @@
       html += `<h2 class="sec-title">Cần bạn xử lý</h2><div class="todo">${todo.map(o => `<article class="panel todo-card">${P.pill(o, 'customer')}
         <h3>${esc(P.orderTitle(o))}</h3><p>${esc(todoText(o))}</p><a class="btn btn-ghost btn-sm" href="#don-${esc(o.id)}">Xem và xử lý</a></article>`).join('')}</div>`;
     }
-    html += `<h2 class="sec-title">Tất cả đơn</h2><div class="olist">${list.map(o => {
-      const m = P.money(o), s = STATUSES[o.status];
-      return `<a class="orow" href="#don-${esc(o.id)}">
-        <div class="orow-main"><span class="orow-title">${esc(P.orderTitle(o))}</span><span class="orow-meta"><span>${esc(o.id)}</span><span>Đặt ${fmt.date(o.createdAt)}</span><span>${fmt.num(P.orderQty(o))} sp</span></span></div>
-        ${mini(o)}
-        <div class="orow-status">${P.pill(o, 'customer')}${o.unreadCustomer ? `<span class="hint">${o.unreadCustomer} tin nhắn mới</span>` : ''}</div>
-        <div class="orow-money">${fmt.vnd(m.total)}<small>${s.off ? 'Đã hủy' : 'Bước ' + (s.stage + 1) + '/' + STAGES.length + ' · ' + STAGES[s.stage]}</small></div>
-      </a>`;
-    }).join('')}</div></div>`;
+    html += `<h2 class="sec-title">Tất cả đơn</h2><div class="ocards">${list.map((o, i) => orderCard(db, o, i === 0 && !STATUSES[o.status].off && !STATUSES[o.status].done)).join('')}</div></div>`;
     return html;
+  }
+
+  // Thẻ đơn ở trang Tra đơn: nhãn trạng thái, sản phẩm, tiền đã trả / còn lại, dòng tiến độ (mở sẵn cho đơn đang chạy mới nhất)
+  function orderCard(db, o, open) {
+    const m = P.money(o), s = STATUSES[o.status];
+    const items = o.items.map(it => esc(it.productName) + ' ×' + fmt.num(it.qty)).join(' · ');
+    const again = s.done || s.off;
+    return `<article class="ocard">
+      <div class="oc-h"><a class="oc-id" href="#don-${esc(o.id)}">#${esc(o.id)}</a>${P.pill(o, 'customer')}</div>
+      <p class="oc-items">${items}</p>
+      <p class="oc-meta">Đặt ${fmt.date(o.createdAt)}${o.unreadCustomer ? ` · <b>${o.unreadCustomer} tin nhắn mới</b>` : ''}</p>
+      ${open ? timeline(o) : ''}
+      ${!s.off && m.remaining > 0 ? `<div class="oc-due"><span>${o.paid1 ? 'Còn lại khi nhận hàng' : 'Cần thanh toán'}</span><b>${fmt.vnd(o.paid1 ? m.remaining : m.first)}</b></div>` : ''}
+      <div class="oc-acts"><a class="btn btn-ghost btn-sm" href="#don-${esc(o.id)}">Xem chi tiết</a>
+        ${again ? `<button class="btn btn-soft btn-sm" type="button" data-act="reorder" data-id="${esc(o.id)}">↻ Đặt lại với cùng file cũ</button>` : `<a class="btn btn-soft btn-sm" href="#don-${esc(o.id)}" data-chat="1">Nhắn shop</a>`}</div>
+    </article>`;
+  }
+
+  // Dòng tiến độ 5 bước: xong (bạc hà), đang làm (xanh, có lời giải thích), chưa tới (xám)
+  function timeline(o) {
+    const s = STATUSES[o.status];
+    if (s.off) return '';
+    const done = P.expectedDone(o), eta = P.expectedArrival(o);
+    const notes = [
+      fmt.date(o.createdAt),
+      o.paid1 ? 'Đã nhận ' + fmt.vnd(o.paid1Amount || P.money(o).first) : o.paidNotice ? 'Shop đang kiểm tra chuyển khoản' : 'Chờ bạn chuyển khoản',
+      o.status === 'san_xuat' ? 'Xưởng đang in' + (done ? ', dự kiến xong ' + fmt.date(done) : '') : '',
+      o.status === 'van_chuyen' ? 'Đang trên đường về' + (eta ? ', dự kiến ' + fmt.date(eta) : '') : '',
+      o.deliveredAt ? 'Giao ngày ' + fmt.date(o.deliveredAt) : ''
+    ];
+    return `<ol class="tline" aria-label="Tiến độ đơn">${STAGES.map((label, i) => {
+      const cls = (s.done || i < s.stage) ? 'ok' : i === s.stage ? 'now' : '';
+      return `<li class="${cls}"${cls === 'now' ? ' aria-current="step"' : ''}><i aria-hidden="true">${cls === 'ok' ? '✓' : i + 1}</i><div><b>${label}</b>${notes[i] && cls ? `<small>${esc(notes[i])}</small>` : ''}</div></li>`;
+    }).join('')}</ol>`;
   }
 
   // ==== Chi tiết đơn ====
@@ -815,7 +892,7 @@
     return `<div class="wrap page">
       <a class="back" href="#theo-doi">← Đơn của bạn</a>
       <div class="page-head"><div><p class="eyebrow">${esc(o.id)}</p><h1>${esc(P.orderTitle(o))}</h1><p>Đặt lúc ${fmt.dateTime(o.createdAt)}</p></div>${P.pill(o, 'customer')}</div>
-      ${stepper(o)}
+      ${timeline(o)}
       <div class="detail">
         <div class="stack">${nextPanel(db, o)}${itemsPanel(o)}${infoPanel(o)}</div>
         <div class="stack">${paymentPanel(o)}${messagesPanel(db, o)}${historyPanel(o)}</div>
@@ -929,7 +1006,7 @@
         return;
       }
       case 'add': if (addSelected()) { P.ui.toast('Đã thêm vào giỏ hàng.'); render(); } return;
-      case 'buy': if (addSelected()) go('gio-hang'); return;
+      case 'buy': if (addSelected()) go('thanh-toan'); return;
       case 'cq-': case 'cq+':
         cartEdit(c => { const x = c[i]; if (x) x.qty = clampQ(x.qty + (a === 'cq+' ? 1 : -1) * (x.min >= 50 ? 10 : 1), x.min); }); return;
       case 'rm': cartEdit(c => { c[i] = null; }); P.ui.toast('Đã xóa khỏi giỏ hàng.'); return;
@@ -940,8 +1017,9 @@
       case 'paid': custAct('notify_paid', {}, 'Đã báo chuyển khoản. Shop sẽ xác nhận sớm.'); return;
       case 'reorder': {
         const db = P.load();
-        const o = P.findOrder(db, route().id);
+        const o = P.findOrder(db, t.dataset.id || route().id);
         if (!o) return;
+        P.setCart([]);
         let missing = 0;
         o.items.forEach(it => {
           const p = P.findProduct(db, it.productId);
@@ -949,7 +1027,9 @@
           if (v) P.addToCart(p.id, v.id, Math.max(it.qty, +v.minQty || 1)); else missing++;
         });
         if (missing) P.ui.toast(missing + ' sản phẩm không còn bán nên không thêm được.');
-        go('gio-hang'); return;
+        // Dùng lại link file và thông tin nhận hàng của đơn cũ; mã đơn và ảnh chuyển khoản làm mới
+        patchCo({ file: o.file || '', note: o.note || '', code: '', ship: { name: o.name, phone: o.phone, social: o.social, address: o.address, city: o.city } });
+        go(P.cartLines(P.load()).length ? 'thanh-toan' : 'gio-hang'); return;
       }
     }
   });
@@ -962,6 +1042,7 @@
       setTotals(v);
       return;
     }
+    if (el.id === 'co-file' || el.id === 'co-note') { patchCo(el.id === 'co-file' ? { file: el.value.trim() } : { note: el.value }); }
     if (el.id === 'find-q') {
       ui.q = el.value;
       const x = root.querySelector('.find-x'); if (x) x.hidden = !ui.q;
@@ -1034,10 +1115,12 @@
     const f = e.target;
     const val = id => (document.getElementById(id) || {}).value || '';
 
-    if (f.id === 'track-form') {
-      const phone = P.normPhone(val('tr-phone'));
-      if (phone.length < 9) { setErr('tr-phone', 'Nhập số điện thoại, ít nhất 9 chữ số.'); document.getElementById('tr-phone').focus(); return; }
+    if (f.id === 'track-form' || f.id === 'look-form') {
+      const fid = f.id === 'look-form' ? 'look-phone' : 'tr-phone';
+      const phone = P.normPhone(val(fid));
+      if (phone.length < 9) { setErr(fid, 'Nhập số điện thoại, ít nhất 9 chữ số.'); document.getElementById(fid).focus(); return; }
       const r = route();
+      const goList = f.id === 'look-form' && r.view !== 'order' && r.view !== 'track';
       if (ui.busy) return;
       ui.busy = true;
       P.setTrack(phone);
@@ -1047,7 +1130,7 @@
           P.setTrack('');
           ui.trackErr = 'Số điện thoại không khớp với đơn này.';
         } else ui.trackErr = '';
-      }, e => { P.setTrack(''); ui.trackErr = P.errText(e); }).then(() => { ui.busy = false; lastRoute = ''; render(); });
+      }, e => { P.setTrack(''); ui.trackErr = P.errText(e); }).then(() => { ui.busy = false; lastRoute = ''; if (goList && !ui.trackErr) go('theo-doi'); else render(); });
       return;
     }
 
@@ -1092,7 +1175,10 @@
       if (P.normPhone(info.phone).length < 9) bad.push(['co-phone', 'Nhập số điện thoại, ít nhất 9 chữ số.']);
       if (!info.social) bad.push(['co-social', 'Dán link Facebook, Instagram hoặc Zalo để shop liên hệ khi cần.']);
       if (!info.address) bad.push(['co-address', 'Nhập địa chỉ nhận hàng.']);
-      ['co-name', 'co-phone', 'co-social', 'co-address'].forEach(id => setErr(id, ''));
+      const file = val('co-file').trim(), note = val('co-note').trim();
+      patchCo({ file, note });
+      if (!P.isUrl(file)) bad.unshift(['co-file', 'Dán link bắt đầu bằng https://, ví dụ link Google Drive.']);
+      ['co-file', 'co-name', 'co-phone', 'co-social', 'co-address'].forEach(id => setErr(id, ''));
       bad.forEach(b => setErr(b[0], b[1]));
       if (bad.length) { document.getElementById(bad[0][0]).focus(); return; }
       const picked = +((f.querySelector('input[name="pay"]:checked') || {}).value || 100);
@@ -1102,6 +1188,7 @@
       if (ui.busy) return;
       const sub = lines.reduce((a, l) => a + l.line, 0);
       const allowed = P.payOptions(db.settings, sub).map(x => x.pct);
+      const co2 = getCo(); co.file = co2.file; co.note = co2.note;
       if (!co.code) { P.ui.toast('Đang tạo mã đơn, chờ một chút rồi bấm lại.'); return; }
       if (!ui.proof) {
         setErr('proof', 'Tải lên ảnh chụp chuyển khoản trước khi đặt hàng.');

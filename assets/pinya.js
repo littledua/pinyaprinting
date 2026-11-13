@@ -384,7 +384,7 @@
   // Màu nhấn của web. "sky" là bộ mặc định trong base.css nên không ghi đè gì.
   // dark: giá trị riêng khi ở chế độ tối.
   const THEMES = {
-    sky: { name: 'Baby blue', dot: '#8FCBF0' },
+    sky: { name: 'Xanh baby', dot: '#7BB8E8' },
     pink: { name: 'Hồng phấn', dot: '#F5A3C7', sky: '#F5A3C7', deep: '#D6578F', soft: '#FDE3EE', wash: '#FEEFF5', text: '#B73C78', hover: '#F18DB8', onCta: '#4A1530', paper: '#FFF8FB', rule: '#F3DCE6',
       dark: { deep: '#F08BB8', soft: '#3A1F2D', wash: '#2A1722', text: '#F6AFCF' } },
     mint: { name: 'Bạc hà', dot: '#9ED9C3', sky: '#9ED9C3', deep: '#2F9C78', soft: '#DDF4EA', wash: '#EAF8F2', text: '#1F7A5B', hover: '#86CDB3', onCta: '#0E3326', paper: '#F6FCF9', rule: '#D8EBE3',
@@ -396,7 +396,7 @@
   };
   // Màu nhấn thứ hai (kiểu Tiệm Dứa): số trên giỏ, nút "+", dải Nổi bật, nhãn số lượng tối thiểu.
   const ACCENTS = {
-    pink: { name: 'Hồng', dot: '#F7C6D9', pop: '#F7C6D9', deep: '#E88FB3', soft: '#FDE8F0', on: '#4A1530', dark: { pop: '#F2A0C4', deep: '#F08BB8', soft: '#3A1F2D', on: '#2A0D1C' } },
+    pink: { name: 'Hồng san hô', dot: '#FF8E9E', pop: '#FF8E9E', deep: '#E86F82', soft: '#FFE8EC', on: '#3B0C16', dark: { pop: '#FFA4B0', deep: '#FF8E9E', soft: '#3A1F2A', on: '#2A0810' } },
     yellow: { name: 'Vàng', dot: '#F8E7A1', pop: '#F8E7A1', deep: '#F0D86A', soft: '#FCF4D4', on: '#3D3205', dark: { pop: '#F5DA7E', deep: '#F0CF5A', soft: '#3A3212', on: '#2A2204' } },
     sky: { name: 'Xanh', dot: '#A9D8F5', pop: '#A9D8F5', deep: '#7BBFEC', soft: '#E3F2FC', on: '#12324A', dark: { pop: '#8FCBF0', deep: '#7CC0EE', soft: '#1C3549', on: '#0F2233' } },
     mint: { name: 'Bạc hà', dot: '#BDE8D4', pop: '#BDE8D4', deep: '#86CDB3', soft: '#E6F7EF', on: '#0E3326', dark: { pop: '#93D3BB', deep: '#7ACDAE', soft: '#17352B', on: '#0B261C' } },
@@ -407,8 +407,8 @@
   const MODES = { auto: 'Theo thiết bị', light: 'Sáng', dark: 'Tối' };
   // gf: tên họ font trên Google Fonts (đều có tiếng Việt). Bỏ trống nếu đã tải sẵn hoặc là font hệ thống.
   const FONTS = {
-    default: { name: 'Mặc định (Quicksand)' },
-    nunito: { name: 'Nunito, tròn và dễ đọc', display: '"Nunito"', body: '"Nunito"' },
+    default: { name: 'Mặc định (Quicksand + Nunito Sans)' },
+    nunito: { name: 'Nunito, tròn và dễ đọc', display: '"Nunito"', body: '"Nunito"', gf: 'Nunito:wght@400;600;700;800' },
     vietnam: { name: 'Be Vietnam Pro, hiện đại', display: '"Be Vietnam Pro"', body: '"Be Vietnam Pro"', gf: 'Be+Vietnam+Pro:wght@400;500;600;700;800' },
     lexend: { name: 'Lexend, rộng và thoáng', display: '"Lexend"', body: '"Lexend"', gf: 'Lexend:wght@400;500;600;700' },
     montserrat: { name: 'Montserrat, gọn và mạnh', display: '"Montserrat"', body: '"Montserrat"', gf: 'Montserrat:wght@400;500;600;700;800' },
