@@ -310,10 +310,9 @@
   // ==== Trang chủ ====
   // Ô tra đơn bằng số điện thoại: có ở trang chủ, trang Tra đơn và khi xem một đơn
   function lookPill(db, big) {
-    const known = P.getTrack();
     return `<form class="look${big ? ' big' : ''}" id="look-form" role="search" novalidate data-keep>
       <label class="sr-only" for="look-phone">Số điện thoại đặt hàng</label>
-      ${ICON.phone}<input id="look-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Nhập số điện thoại để xem đơn…" value="${esc(known ? fmt.phone(known) : '')}" aria-describedby="err-look-phone">
+      ${ICON.phone}<input id="look-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Nhập số điện thoại để xem đơn…" value="" aria-describedby="err-look-phone">
       <button class="btn btn-cta" type="submit">Tra cứu</button>
     </form><p class="err look-err" id="err-look-phone">${esc(ui.trackErr)}</p>`;
   }
