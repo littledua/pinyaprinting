@@ -25,7 +25,7 @@ Sau khi chỉnh xong và đã tự kiểm tra thì tự merge vào `main` (chủ
 ## Về dự án
 - Web tĩnh HTML/CSS/JS thuần, **không build**, chạy trên GitHub Pages: https://littledua.github.io/pinyaprinting/ (admin: `admin.html`).
 - Nhánh làm việc: `claude/pinya-printing-web-6xrt0s`. Đẩy lên nhánh rồi `git push origin HEAD:main`.
-- `index.html` (cửa hàng), `admin.html`, `assets/` (`pinya.js` dữ liệu + logic, `shop.js`, `admin.js`, `base.css`, `shop.css`, `app.css`, `config.js`, `vendor/supabase.js`), `pearly/` (app chi tiêu cá nhân, một file `index.html`), `supabase/` (schema, Edge Function `import-images`), `HUONG-DAN.md`.
+- `index.html` (cửa hàng), `admin.html`, `assets/` (`pinya.js` dữ liệu + logic, `shop.js`, `admin.js`, `base.css`, `shop.css`, `app.css`, `config.js`, `vendor/supabase.js`), `pearly/` (chỉ còn trang chuyển hướng + `sw.js` tự gỡ; app Pearly đã dời sang repo `littledua/pearly`, link https://littledua.github.io/pearly/), `supabase/` (schema, Edge Function `import-images`), `HUONG-DAN.md`.
 - Backend Supabase: bảng `records`, RLS, RPC cho khách (`submit_order`, `track_orders`, `customer_action`). Khóa publishable trong `assets/config.js`; không đưa khóa bí mật vào repo.
 - Không có `config.js` điền sẵn thì chạy chế độ thử bằng localStorage.
 
